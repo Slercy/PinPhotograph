@@ -4,7 +4,12 @@
 
 PinPic 是一款图片拼接编辑网页应用，支持将多张图片进行高质量拼接，并提供丰富的边框自定义选项，最独特的在于高斯模糊背景选项。
 
-效果示意：![PinPic-20251124_234556|100](https://github.com/user-attachments/assets/ca2ab060-e952-4b6d-8e96-c16ccf370548)
+效果示意：
+<div align="center">
+    <img src="https://github.com/user-attachments/assets/f1408f92-ebfb-4ffa-bd1c-b0e9b0e465ad" width="20%">
+    <img src="https://github.com/user-attachments/assets/9896e5da-413b-4205-9ff7-f5cd74446c45" width="20%">
+    <img src="https://github.com/user-attachments/assets/c5e5d9be-0672-4abd-b990-28eee0ddf7bd" width="20%">
+</div>
 
 ## 功能特性
 
