@@ -1,0 +1,1193 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>PinPic</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* * Color Palette & Base Styles 
+         * Theme Blue: #29499d
+         * Background Gray: #292932
+         */
+        :root {
+            --theme-blue: #29499d;
+            --bg-gray: #292932;
+            --surface-gray: #3a3a45;
+            --text-white: #f0f0f0;
+        }
+
+        body {
+            background-color: var(--bg-gray);
+            color: var(--text-white);
+            font-family: 'Roboto', sans-serif;
+            overflow: hidden; /* Prevent body scroll, handle inside containers */
+            height: 100vh;
+            width: 100vw;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Material You Style Sliders (Custom CSS) */
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+            margin: 10px 0;
+            cursor: pointer;
+        }
+        input[type=range]:focus { outline: none; }
+
+        /* Webkit (Chrome/Safari/Edge) */
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 24px;
+            cursor: pointer;
+            background: var(--surface-gray);
+            border-radius: 12px;
+            border: 1px solid #555;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            height: 24px;
+            width: 24px;
+            border-radius: 50%;
+            background: var(--theme-blue);
+            cursor: pointer;
+            -webkit-appearance: none;
+            margin-top: -1px;
+            box-shadow: 0 0 2px rgba(0,0,0,0.5);
+        }
+
+        /* Firefox */
+        input[type=range]::-moz-range-track {
+            width: 100%;
+            height: 24px;
+            cursor: pointer;
+            background: var(--surface-gray);
+            border-radius: 12px;
+            border: 1px solid #555;
+        }
+        input[type=range]::-moz-range-thumb {
+            height: 24px;
+            width: 24px;
+            border: none;
+            border-radius: 50%;
+            background: var(--theme-blue);
+            cursor: pointer;
+        }
+
+        /* Number inputs styling */
+        input[type=number] {
+            background: var(--surface-gray);
+            color: white;
+            border: 1px solid #555;
+            border-radius: 8px;
+            padding: 4px;
+            text-align: center;
+        }
+        input[type=number]::-webkit-inner-spin-button, 
+        input[type=number]::-webkit-outer-spin-button { 
+            -webkit-appearance: none; margin: 0; 
+        }
+
+        /* Modern Loading Animation (Liquid Dots) */
+        .loader-dots {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 8px;
+        }
+        .loader-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background-color: var(--theme-blue);
+            animation: bounce 0.6s infinite alternate;
+        }
+        .loader-dot:nth-child(2) { animation-delay: 0.2s; background-color: #4c6ef5; }
+        .loader-dot:nth-child(3) { animation-delay: 0.4s; background-color: #748ffc; }
+
+        @keyframes bounce {
+            to { transform: translateY(-10px); opacity: 0.7; }
+        }
+
+        /* UI Containers */
+        .screen {
+            display: none;
+            height: 100%;
+            width: 100%;
+        }
+        .screen.active { display: flex; }
+
+        /* Custom Scrollbar for controls */
+        .controls-scroll::-webkit-scrollbar { width: 4px; }
+        .controls-scroll::-webkit-scrollbar-thumb {
+            background-color: #555;
+            border-radius: 4px;
+        }
+
+        /* Button Ripple Effect */
+        .btn-ripple {
+            position: relative;
+            overflow: hidden;
+            transform: translate3d(0, 0, 0);
+        }
+        .btn-ripple:after {
+            content: "";
+            display: block;
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            top: 0;
+            left: 0;
+            pointer-events: none;
+            background-image: radial-gradient(circle, #fff 10%, transparent 10.01%);
+            background-repeat: no-repeat;
+            background-position: 50%;
+            transform: scale(10, 10);
+            opacity: 0;
+            transition: transform .5s, opacity 1s;
+        }
+        .btn-ripple:active:after {
+            transform: scale(0, 0);
+            opacity: .3;
+            transition: 0s;
+        }
+
+        /* Color Preset Circle */
+        .color-preset {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            cursor: pointer;
+            border: 2px solid transparent;
+            transition: transform 0.2s, border-color 0.2s;
+            position: relative;
+        }
+        .color-preset:hover { transform: scale(1.1); }
+        .color-preset.active { border-color: white; transform: scale(1.1); }
+        /* Add checkmark for active */
+        .color-preset.active::after {
+            content: '';
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            width: 12px; height: 12px;
+            background-color: #fff;
+            border-radius: 50%;
+            mix-blend-mode: difference; /* Ensure visible on any color */
+            pointer-events: none;
+        }
+
+        /* Rainbow Button for Custom Color */
+        .rainbow-ring {
+            background: conic-gradient(red, orange, yellow, green, blue, indigo, violet, red);
+            padding: 2px;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+        .rainbow-inner {
+            background: var(--bg-gray);
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* --- RESPONSIVE LAYOUT LOGIC --- */
+        @media (min-width: 768px) {
+            #editor-screen {
+                flex-direction: row !important; /* Side by side */
+            }
+            #preview-container {
+                height: 100% !important;
+                width: 60% !important; /* Left side bigger */
+                border-right: 1px solid #444;
+            }
+            #controls-container {
+                height: 100% !important;
+                width: 40% !important;
+                border-top: none !important;
+                border-radius: 0 !important; /* Remove top rounded corners for desktop */
+            }
+        }
+    </style>
+</head>
+<body class="antialiased">
+
+    <!-- 1. HOME SCREEN -->
+    <div id="home-screen" class="screen active flex-col justify-center items-center relative">
+        <h1 class="absolute top-12 text-4xl font-bold tracking-widest text-[#f0f0f0]" style="font-family: 'Courier New', monospace;">PinPic</h1>
+        
+        <div class="flex flex-col items-center space-y-6 w-full px-8">
+            <button id="btn-select-images" class="btn-ripple bg-[#29499d] text-white text-xl font-medium py-4 px-12 rounded-full shadow-lg w-64 hover:bg-[#345ac5] transition-colors">
+                选择图片
+            </button>
+            <p class="text-gray-400 text-sm">请选择 2 到 6 张图片</p>
+        </div>
+        
+        <!-- Hidden Inputs -->
+        <input type="file" id="file-input" multiple accept="image/*" class="hidden">
+        <input type="file" id="custom-bg-input" accept="image/*" class="hidden">
+    </div>
+
+    <!-- 2. EDITOR SCREEN -->
+    <div id="editor-screen" class="screen flex-col">
+        
+        <!-- Left/Top: Preview Area -->
+        <div id="preview-container" class="h-[60%] w-full flex items-center justify-center bg-[#202025] p-4 relative overflow-hidden transition-all">
+            <canvas id="preview-canvas" class="shadow-2xl max-w-full max-h-full object-contain"></canvas>
+        </div>
+
+        <!-- Right/Bottom: Controls Area -->
+        <div id="controls-container" class="flex-1 w-full bg-[#292932] flex flex-col rounded-t-[2rem] shadow-[0_-4px_20px_rgba(0,0,0,0.3)] overflow-hidden z-10 border-t border-[#444] transition-all">
+            
+            <!-- Controls Scrollable Content -->
+            <div class="flex-1 overflow-y-auto p-6 space-y-6 controls-scroll pb-20">
+                
+                <!-- Image Management Section -->
+                <div class="bg-[#3a3a45] p-4 rounded-2xl shadow-sm">
+                    <div class="flex items-center justify-between mb-3 border-b border-gray-600 pb-2">
+                        <span class="text-sm font-medium text-gray-300">图片列表 (<span id="img-count">0</span>)</span>
+                        
+                        <div class="flex space-x-2">
+                             <button id="btn-add-images" class="btn-ripple bg-[#444] hover:bg-[#555] text-white px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center space-x-1 border border-gray-500">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                                <span>添加</span>
+                            </button>
+                            <input type="file" id="add-file-input" multiple accept="image/*" class="hidden">
+                        </div>
+                    </div>
+
+                    <!-- Image List -->
+                    <div id="image-list-container" class="space-y-2 max-h-48 overflow-y-auto pr-1 controls-scroll">
+                        <div class="text-center text-xs text-gray-500 py-2">暂无图片</div>
+                    </div>
+                </div>
+
+                <!-- Border Thickness -->
+                <div class="control-group">
+                    <div class="flex justify-between items-center mb-1">
+                        <label class="text-sm font-medium text-gray-300">边框宽度</label>
+                        <input type="number" id="val-border-width" min="0" max="100" class="w-16">
+                    </div>
+                    <div class="flex items-center space-x-4">
+                        <input type="range" id="slider-border-width" min="0" max="20" step="0.1" class="flex-1">
+                    </div>
+                </div>
+
+                <!-- Mode Selection -->
+                <div class="bg-[#3a3a45] p-2 rounded-2xl flex justify-between space-x-2">
+                    <button class="mode-btn flex-1 py-3 rounded-xl text-sm font-medium transition-all bg-[#29499d] text-white" data-mode="solid">纯色</button>
+                    <button class="mode-btn flex-1 py-3 rounded-xl text-sm font-medium transition-all text-gray-400 hover:text-white" data-mode="self">已选图</button>
+                    <button class="mode-btn flex-1 py-3 rounded-xl text-sm font-medium transition-all text-gray-400 hover:text-white" data-mode="custom">自定义</button>
+                </div>
+
+                <!-- OPTION SET 1: Solid Color (Beautified with Morandi) -->
+                <div id="opt-solid" class="control-group animate-fade-in bg-[#3a3a45] p-4 rounded-2xl">
+                    <label class="text-sm font-medium text-gray-300 block mb-3">边框颜色 (莫兰迪色系)</label>
+                    
+                    <!-- Presets (Injected by JS) -->
+                    <div id="color-presets-container" class="flex flex-wrap gap-3 mb-4 justify-start">
+                        <!-- Presets will be here -->
+                    </div>
+
+                    <!-- Custom Input Row -->
+                    <div class="flex items-center justify-between border-t border-gray-600 pt-3">
+                        <div class="flex items-center space-x-3">
+                             <div class="relative w-10 h-10 rainbow-ring">
+                                 <div class="rainbow-inner">
+                                    <div id="current-color-preview" class="w-6 h-6 rounded-full bg-white shadow-sm border border-gray-400"></div>
+                                 </div>
+                                 <input type="color" id="color-picker" value="#ffffff" class="absolute inset-0 opacity-0 cursor-pointer w-full h-full">
+                             </div>
+                             <span class="text-xs text-gray-400">自定义</span>
+                        </div>
+                        
+                        <div class="flex items-center bg-[#292932] rounded-lg px-3 py-1 border border-gray-600">
+                            <span class="text-gray-400 mr-2">#</span>
+                            <input type="text" id="color-hex-input" value="FFFFFF" class="bg-transparent border-none text-white w-16 text-sm font-mono focus:outline-none uppercase" maxlength="6">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- OPTION SET 2 & 3: Background Image Controls -->
+                <div id="opt-bg-controls" class="hidden space-y-6 animate-fade-in">
+                    
+                    <!-- Custom Image Selector -->
+                    <div id="custom-img-btn-container" class="hidden">
+                         <button id="btn-select-custom-bg" class="w-full btn-ripple bg-[#444] text-gray-200 text-sm font-medium py-3 px-4 rounded-xl border border-dashed border-gray-500 hover:bg-[#555] flex items-center justify-center space-x-2">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+                            <span>更换背景图片</span>
+                        </button>
+                    </div>
+
+                    <!-- Blur -->
+                    <div>
+                        <div class="flex justify-between items-center mb-1">
+                            <label class="text-sm font-medium text-gray-300">模糊程度</label>
+                            <input type="number" id="val-blur" min="0" max="100" class="w-16">
+                        </div>
+                        <div class="flex items-center space-x-4">
+                            <input type="range" id="slider-blur" min="0" max="100" class="flex-1">
+                        </div>
+                    </div>
+
+                    <!-- Saturation -->
+                    <div>
+                        <div class="flex justify-between items-center mb-1">
+                            <label class="text-sm font-medium text-gray-300">背景饱和度</label>
+                            <input type="number" id="val-saturation" min="0" max="500" class="w-16">
+                        </div>
+                        <div class="flex items-center space-x-4">
+                            <input type="range" id="slider-saturation" min="0" max="500" value="100" class="flex-1">
+                        </div>
+                    </div>
+
+                    <!-- Brightness -->
+                    <div>
+                        <div class="flex justify-between items-center mb-1">
+                            <label class="text-sm font-medium text-gray-300">背景深浅</label>
+                            <input type="number" id="val-brightness" min="-100" max="100" class="w-16">
+                        </div>
+                        <div class="flex items-center space-x-4">
+                            <input type="range" id="slider-brightness" min="-100" max="100" class="flex-1">
+                        </div>
+                    </div>
+
+                    <!-- Scale -->
+                    <div>
+                        <div class="flex justify-between items-center mb-1">
+                            <label class="text-sm font-medium text-gray-300">缩放背景</label>
+                            <input type="number" id="val-scale" min="100" max="500" class="w-16">
+                        </div>
+                        <div class="flex items-center space-x-4">
+                            <input type="range" id="slider-scale" min="100" max="500" value="100" class="flex-1">
+                        </div>
+                    </div>
+
+                    <!-- Position -->
+                    <div class="bg-[#3a3a45] p-3 rounded-2xl">
+                        <label class="text-sm font-medium text-gray-300 block mb-2">调整位置</label>
+                        <div class="grid grid-cols-1 gap-4">
+                            <!-- X Axis -->
+                            <div class="flex items-center space-x-2">
+                                <span class="text-xs text-gray-400 w-8">水平</span>
+                                <input type="range" id="slider-pos-x" min="-100" max="100" value="0" class="flex-1">
+                                <input type="number" id="val-pos-x" min="-100" max="100" class="w-14">
+                            </div>
+                            <!-- Y Axis -->
+                            <div class="flex items-center space-x-2">
+                                <span class="text-xs text-gray-400 w-8">垂直</span>
+                                <input type="range" id="slider-pos-y" min="-100" max="100" value="0" class="flex-1">
+                                <input type="number" id="val-pos-y" min="-100" max="100" class="w-14">
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- Export Settings -->
+                <div class="bg-[#333] p-4 rounded-2xl mt-8 border border-gray-700 space-y-4">
+                    <div class="flex items-center space-x-2 border-b border-gray-600 pb-2 mb-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                        <span class="text-sm font-bold text-gray-300">导出设置</span>
+                    </div>
+
+                    <!-- Quality -->
+                    <div>
+                        <div class="flex justify-between items-center mb-1">
+                            <label class="text-xs font-medium text-gray-400">JPG 画质 (压缩率)</label>
+                            <span id="val-quality-display" class="text-xs text-[#29499d] font-bold bg-[#29499d20] px-2 py-0.5 rounded">95%</span>
+                        </div>
+                        <input type="range" id="slider-quality" min="10" max="100" value="95">
+                    </div>
+
+                    <!-- Resolution -->
+                    <div>
+                        <div class="flex justify-between items-center mb-1">
+                            <label class="text-xs font-medium text-gray-400">分辨率缩放</label>
+                            <span id="val-res-scale-display" class="text-xs text-[#29499d] font-bold bg-[#29499d20] px-2 py-0.5 rounded">100%</span>
+                        </div>
+                        <input type="range" id="slider-res-scale" min="10" max="100" value="100">
+                        <div class="text-center mt-1">
+                            <span id="resolution-pixel-display" class="text-xs font-mono text-gray-500">计算中...</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="h-12"></div> <!-- Spacer -->
+            </div>
+
+            <!-- Footer Buttons -->
+            <div class="p-4 bg-[#292932] border-t border-[#444] flex flex-col space-y-3 z-20">
+                <button id="btn-save" class="btn-ripple w-full bg-[#29499d] text-white font-bold py-3 rounded-full text-lg shadow-lg hover:bg-[#345ac5] transition-colors flex items-center justify-center">
+                    <span>生成并保存</span>
+                </button>
+                <button id="btn-back-home" class="hidden w-full bg-transparent border border-[#555] text-gray-300 font-medium py-3 rounded-full text-lg hover:bg-[#3a3a45] transition-colors">
+                    回到主界面
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed bottom-32 left-1/2 transform -translate-x-1/2 bg-[#333] text-white px-6 py-3 rounded-full shadow-2xl opacity-0 transition-opacity pointer-events-none z-50 text-sm border border-[#555] flex items-center space-x-2">
+        <svg class="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+        <span id="toast-msg">操作成功</span>
+    </div>
+
+    <!-- Global Loading Indicator -->
+    <div id="loading-indicator" class="hidden fixed inset-0 bg-[#000000cc] flex flex-col items-center justify-center text-white z-[100] backdrop-blur-md transition-all duration-300">
+        <div class="loader-dots mb-6">
+            <div class="loader-dot"></div>
+            <div class="loader-dot"></div>
+            <div class="loader-dot"></div>
+        </div>
+        <span class="text-base font-medium tracking-widest opacity-90 animate-pulse">正在处理...</span>
+    </div>
+
+<script>
+    /**
+     * PinPic Logic
+     */
+
+    // --- Constants ---
+    // 20 Morandi Colors + Black/White
+    const COLOR_PRESETS = [
+        '#FFFFFF', // White
+        '#000000', // Black
+        '#A4B0BE', // Mist Blue
+        '#99A8B2', // Haze Blue
+        '#E0CDCF', // Dusty Pink
+        '#707C74', // Olive Green
+        '#F2E6CE', // Cream
+        '#E6D0B4', // Sand
+        '#8D8782', // Greyish Brown
+        '#B09B87', // Clay
+        '#8FA395', // Sage Green
+        '#C3C2D3', // Lavender Grey
+        '#D9988D', // Muted Coral
+        '#778899', // Slate Grey
+        '#B3A69F', // Taupe
+        '#C6D6A8', // Matcha
+        '#5B7C99', // Denim Grey
+        '#A65E5E', // Rust
+        '#8C7B75', // Mocha
+        '#B4C7C2'  // Silver Sage
+    ];
+
+    // --- State Management ---
+    const defaultState = {
+        borderWidthRatio: 5, 
+        mode: 'solid',
+        solidColor: '#ffffff',
+        blur: 20,
+        saturation: 100,
+        brightness: -20,
+        scale: 100,
+        posX: 0,
+        posY: 0,
+        exportQuality: 95,
+        exportScale: 100
+    };
+
+    let appState = JSON.parse(localStorage.getItem('pinpic_settings')) || { ...defaultState };
+    
+    // Runtime Data
+    let selectedImages = []; 
+    let originalImageObjects = []; 
+    let stitchedImage = null; // OPTIMIZATION: Now stores a Canvas element, not an Image object
+    let customBgImage = null; 
+    let maxImageWidth = 0;
+    
+    let renderRequestId = null;
+
+    // DOM Elements
+    const views = {
+        home: document.getElementById('home-screen'),
+        editor: document.getElementById('editor-screen')
+    };
+
+    const inputs = {
+        file: document.getElementById('file-input'),
+        addFile: document.getElementById('add-file-input'),
+        customBgFile: document.getElementById('custom-bg-input'),
+        borderWidthSlider: document.getElementById('slider-border-width'),
+        borderWidthNum: document.getElementById('val-border-width'),
+        colorPicker: document.getElementById('color-picker'),
+        colorPreview: document.getElementById('current-color-preview'),
+        colorHexInput: document.getElementById('color-hex-input'),
+        presetsContainer: document.getElementById('color-presets-container'),
+        modeBtns: document.querySelectorAll('.mode-btn'),
+        blurSlider: document.getElementById('slider-blur'),
+        blurNum: document.getElementById('val-blur'),
+        satSlider: document.getElementById('slider-saturation'),
+        satNum: document.getElementById('val-saturation'),
+        brightSlider: document.getElementById('slider-brightness'),
+        brightNum: document.getElementById('val-brightness'),
+        scaleSlider: document.getElementById('slider-scale'),
+        scaleNum: document.getElementById('val-scale'),
+        posX: document.getElementById('slider-pos-x'),
+        posXNum: document.getElementById('val-pos-x'),
+        posY: document.getElementById('slider-pos-y'),
+        posYNum: document.getElementById('val-pos-y'),
+        qualitySlider: document.getElementById('slider-quality'),
+        qualityDisplay: document.getElementById('val-quality-display'),
+        resScaleSlider: document.getElementById('slider-res-scale'),
+        resScaleDisplay: document.getElementById('val-res-scale-display'),
+        resPixelDisplay: document.getElementById('resolution-pixel-display'),
+        secSolid: document.getElementById('opt-solid'),
+        secBgControls: document.getElementById('opt-bg-controls'),
+        btnCustomBg: document.getElementById('custom-img-btn-container'),
+        btnAddImages: document.getElementById('btn-add-images'),
+        btnSave: document.getElementById('btn-save'),
+        btnHome: document.getElementById('btn-back-home'),
+        previewCanvas: document.getElementById('preview-canvas'),
+        loading: document.getElementById('loading-indicator'),
+        imgCount: document.getElementById('img-count'),
+        imageListContainer: document.getElementById('image-list-container')
+    };
+
+    // --- Initialization ---
+
+    function init() {
+        renderColorPresets(); // New function to render JS defined colors
+        restoreUIFromState();
+        setupEventListeners();
+        setupDragDrop();
+    }
+
+    function renderColorPresets() {
+        inputs.presetsContainer.innerHTML = '';
+        COLOR_PRESETS.forEach(color => {
+            const div = document.createElement('div');
+            div.className = 'color-preset';
+            div.style.backgroundColor = color;
+            div.dataset.color = color;
+            if(color.toLowerCase() === '#ffffff') div.style.border = '1px solid #555';
+            inputs.presetsContainer.appendChild(div);
+        });
+        // Re-query for listeners
+        inputs.presets = document.querySelectorAll('.color-preset');
+    }
+
+    function saveSettings() {
+        localStorage.setItem('pinpic_settings', JSON.stringify(appState));
+    }
+
+    function requestRender() {
+        if (renderRequestId) cancelAnimationFrame(renderRequestId);
+        renderRequestId = requestAnimationFrame(() => {
+            renderPreview(false); 
+            updateResolutionDisplay();
+        });
+    }
+
+    function restoreUIFromState() {
+        inputs.borderWidthSlider.value = appState.borderWidthRatio;
+        inputs.borderWidthNum.value = appState.borderWidthRatio;
+        updateColorUI(appState.solidColor);
+        inputs.blurSlider.value = appState.blur;
+        inputs.blurNum.value = appState.blur;
+        inputs.satSlider.value = appState.saturation;
+        inputs.satNum.value = appState.saturation;
+        inputs.brightSlider.value = appState.brightness;
+        inputs.brightNum.value = appState.brightness;
+        inputs.scaleSlider.value = appState.scale;
+        inputs.scaleNum.value = appState.scale;
+        inputs.posX.value = appState.posX;
+        inputs.posXNum.value = appState.posX;
+        inputs.posY.value = appState.posY;
+        inputs.posYNum.value = appState.posY;
+        inputs.qualitySlider.value = appState.exportQuality;
+        inputs.qualityDisplay.textContent = appState.exportQuality + '%';
+        inputs.resScaleSlider.value = appState.exportScale;
+        inputs.resScaleDisplay.textContent = appState.exportScale + '%';
+        updateModeUI(appState.mode);
+    }
+
+    function updateColorUI(hex) {
+        appState.solidColor = hex;
+        inputs.colorPicker.value = hex;
+        inputs.colorPreview.style.backgroundColor = hex;
+        inputs.colorHexInput.value = hex.replace('#', '').toUpperCase();
+        
+        inputs.presets.forEach(p => {
+            if (p.dataset.color.toLowerCase() === hex.toLowerCase()) {
+                p.classList.add('active');
+                p.style.borderColor = (hex.toLowerCase() === '#ffffff') ? '#ccc' : hex;
+            } else {
+                p.classList.remove('active');
+                p.style.borderColor = 'transparent';
+                if(p.dataset.color.toLowerCase() === '#ffffff') p.style.border = '1px solid #555';
+            }
+        });
+    }
+
+    // --- Event Listeners ---
+
+    function setupEventListeners() {
+        document.getElementById('btn-select-images').addEventListener('click', () => {
+            inputs.file.click();
+        });
+
+        inputs.btnAddImages.addEventListener('click', () => {
+            inputs.addFile.click();
+        });
+
+        inputs.file.addEventListener('change', (e) => handleFiles(e, true)); 
+        inputs.addFile.addEventListener('change', (e) => handleFiles(e, false)); 
+
+        document.getElementById('btn-select-custom-bg').addEventListener('click', () => {
+            inputs.customBgFile.click();
+        });
+        inputs.customBgFile.addEventListener('change', handleCustomBgSelection);
+
+        bindSync(inputs.borderWidthSlider, inputs.borderWidthNum, (val) => {
+            appState.borderWidthRatio = parseFloat(val);
+            requestRender();
+        });
+
+        inputs.colorPicker.addEventListener('input', (e) => {
+            updateColorUI(e.target.value);
+            requestRender();
+        });
+        
+        inputs.presets.forEach(p => {
+            p.addEventListener('click', () => {
+                updateColorUI(p.dataset.color);
+                requestRender();
+            });
+        });
+
+        inputs.colorHexInput.addEventListener('change', (e) => {
+            let val = e.target.value.trim();
+            if(!val.startsWith('#')) val = '#' + val;
+            if(/^#[0-9A-F]{6}$/i.test(val)){
+                updateColorUI(val);
+                requestRender();
+            }
+        });
+
+        bindSync(inputs.blurSlider, inputs.blurNum, (val) => {
+            appState.blur = parseInt(val);
+            requestRender();
+        });
+        bindSync(inputs.satSlider, inputs.satNum, (val) => {
+            appState.saturation = parseInt(val);
+            requestRender();
+        });
+        bindSync(inputs.brightSlider, inputs.brightNum, (val) => {
+            appState.brightness = parseInt(val);
+            requestRender();
+        });
+        bindSync(inputs.scaleSlider, inputs.scaleNum, (val) => {
+            appState.scale = parseInt(val);
+            requestRender();
+        });
+        bindSync(inputs.posX, inputs.posXNum, (val) => {
+            appState.posX = parseInt(val);
+            requestRender();
+        });
+        bindSync(inputs.posY, inputs.posYNum, (val) => {
+            appState.posY = parseInt(val);
+            requestRender();
+        });
+
+        inputs.qualitySlider.addEventListener('input', (e) => {
+            const val = parseInt(e.target.value);
+            appState.exportQuality = val;
+            inputs.qualityDisplay.textContent = val + '%';
+            saveSettings();
+        });
+
+        inputs.resScaleSlider.addEventListener('input', (e) => {
+            const val = parseInt(e.target.value);
+            appState.exportScale = val;
+            inputs.resScaleDisplay.textContent = val + '%';
+            updateResolutionDisplay(); 
+            saveSettings();
+        });
+
+        inputs.modeBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                appState.mode = btn.dataset.mode;
+                updateModeUI(appState.mode);
+                requestRender();
+            });
+        });
+
+        inputs.btnSave.addEventListener('click', handleSave);
+
+        inputs.btnHome.addEventListener('click', () => {
+            window.location.reload(); 
+        });
+
+        function bindSync(slider, num, callback) {
+            slider.addEventListener('input', () => {
+                num.value = slider.value;
+                callback(slider.value);
+                saveSettings();
+            });
+            num.addEventListener('input', () => {
+                let val = parseFloat(num.value);
+                if (val > parseFloat(slider.max)) val = parseFloat(slider.max);
+                if (val < parseFloat(slider.min)) val = parseFloat(slider.min);
+                if (isNaN(val)) return;
+                slider.value = val;
+                callback(val);
+                saveSettings();
+            });
+        }
+    }
+
+    function updateModeUI(mode) {
+        inputs.modeBtns.forEach(btn => {
+            if (btn.dataset.mode === mode) {
+                btn.classList.remove('text-gray-400');
+                btn.classList.add('bg-[#29499d]', 'text-white');
+            } else {
+                btn.classList.remove('bg-[#29499d]', 'text-white');
+                btn.classList.add('text-gray-400');
+            }
+        });
+
+        if (mode === 'solid') {
+            inputs.secSolid.classList.remove('hidden');
+            inputs.secBgControls.classList.add('hidden');
+        } else {
+            inputs.secSolid.classList.add('hidden');
+            inputs.secBgControls.classList.remove('hidden');
+            
+            if (mode === 'custom') {
+                inputs.btnCustomBg.classList.remove('hidden');
+            } else {
+                inputs.btnCustomBg.classList.add('hidden');
+            }
+        }
+        saveSettings();
+    }
+
+    // --- Logic: Image List UI & Reordering ---
+
+    function renderImageList() {
+        const container = inputs.imageListContainer;
+        container.innerHTML = '';
+
+        if (originalImageObjects.length === 0) {
+            container.innerHTML = '<div class="text-center text-xs text-gray-500 py-2">暂无图片</div>';
+            return;
+        }
+
+        originalImageObjects.forEach((img, index) => {
+            const div = document.createElement('div');
+            div.className = 'flex items-center bg-[#292932] p-2 rounded-lg border border-[#444] animate-fade-in group';
+            
+            const thumbCanvas = document.createElement('canvas');
+            thumbCanvas.width = 40;
+            thumbCanvas.height = 40;
+            const tCtx = thumbCanvas.getContext('2d');
+            const size = Math.min(img.width, img.height);
+            tCtx.drawImage(img, (img.width-size)/2, (img.height-size)/2, size, size, 0, 0, 40, 40);
+            thumbCanvas.className = 'rounded w-10 h-10 bg-black mr-3 flex-shrink-0';
+            
+            const infoDiv = document.createElement('div');
+            infoDiv.className = 'flex-1 min-w-0';
+            infoDiv.innerHTML = `<div class="text-xs text-gray-300 truncate">图 ${index + 1}</div><div class="text-[10px] text-gray-500">${img.width}x${img.height}</div>`;
+
+            const controlsDiv = document.createElement('div');
+            controlsDiv.className = 'flex space-x-1';
+
+            const btnUp = document.createElement('button');
+            btnUp.className = `p-1 rounded text-gray-400 hover:text-white hover:bg-[#555] ${index === 0 ? 'opacity-30 cursor-not-allowed' : ''}`;
+            btnUp.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="18 15 12 9 6 15"></polyline></svg>`;
+            if (index > 0) {
+                btnUp.onclick = () => moveImage(index, -1);
+            }
+
+            const btnDown = document.createElement('button');
+            btnDown.className = `p-1 rounded text-gray-400 hover:text-white hover:bg-[#555] ${index === originalImageObjects.length - 1 ? 'opacity-30 cursor-not-allowed' : ''}`;
+            btnDown.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>`;
+            if (index < originalImageObjects.length - 1) {
+                btnDown.onclick = () => moveImage(index, 1);
+            }
+
+            const btnDel = document.createElement('button');
+            btnDel.className = 'p-1 rounded text-red-400 hover:bg-red-900/30 ml-1';
+            btnDel.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>`;
+            btnDel.onclick = () => removeImage(index);
+
+            controlsDiv.appendChild(btnUp);
+            controlsDiv.appendChild(btnDown);
+            controlsDiv.appendChild(btnDel);
+
+            div.appendChild(thumbCanvas);
+            div.appendChild(infoDiv);
+            div.appendChild(controlsDiv);
+            container.appendChild(div);
+        });
+    }
+
+    // Optimization: Removed setTimeout and loader for instant swap
+    function moveImage(index, direction) {
+        const newIndex = index + direction;
+        if (newIndex < 0 || newIndex >= originalImageObjects.length) return;
+        
+        // Swap
+        const temp = originalImageObjects[index];
+        originalImageObjects[index] = originalImageObjects[newIndex];
+        originalImageObjects[newIndex] = temp;
+        
+        refreshAfterImageUpdate();
+    }
+
+    function removeImage(index) {
+        if (originalImageObjects.length <= 2) {
+            showToast("至少需要保留 2 张图片", true);
+            return;
+        }
+        originalImageObjects.splice(index, 1);
+        refreshAfterImageUpdate();
+    }
+
+    function refreshAfterImageUpdate() {
+        // Instant update without loading screen for responsiveness
+        recalculateDimensions();
+        inputs.imgCount.innerText = originalImageObjects.length;
+        generateStitchedBase(); 
+        renderImageList();
+        requestRender();
+    }
+
+    // --- Logic: Dimensions & Resolution Display ---
+
+    function getLogicalDimensions() {
+        if (selectedImages.length === 0) return { w: 0, h: 0 };
+        
+        const borderWidth = maxImageWidth * (appState.borderWidthRatio / 100);
+        const totalContentHeight = selectedImages.reduce((sum, item) => sum + item.height, 0);
+        const totalBordersHeight = borderWidth * (selectedImages.length + 1);
+        
+        const logicalWidth = maxImageWidth + (borderWidth * 2);
+        const logicalHeight = totalContentHeight + totalBordersHeight;
+        
+        return { w: logicalWidth, h: logicalHeight };
+    }
+
+    function updateResolutionDisplay() {
+        const dim = getLogicalDimensions();
+        if(dim.w === 0) {
+            inputs.resPixelDisplay.textContent = '计算中...';
+            return;
+        }
+        const scale = appState.exportScale / 100;
+        const finalW = Math.round(dim.w * scale);
+        const finalH = Math.round(dim.h * scale);
+        inputs.resPixelDisplay.textContent = `${finalW} x ${finalH} px`;
+    }
+
+    // --- Core Logic: Image Processing ---
+
+    async function handleFiles(e, isReplace = false) {
+        const files = Array.from(e.target.files);
+        if (files.length === 0) return;
+        
+        if (isReplace && files.length < 2) {
+             showToast('请至少选择 2 张图片', true);
+             return;
+        }
+
+        toggleLoading(true);
+
+        try {
+            const promises = files.map(file => {
+                return new Promise((resolve, reject) => {
+                    const img = new Image();
+                    img.onload = () => resolve(img);
+                    img.onerror = reject;
+                    img.src = URL.createObjectURL(file);
+                });
+            });
+
+            const newImages = await Promise.all(promises);
+
+            if (isReplace) {
+                originalImageObjects = newImages;
+            } else {
+                originalImageObjects = [...originalImageObjects, ...newImages];
+            }
+
+            recalculateDimensions();
+            inputs.imgCount.innerText = originalImageObjects.length;
+            renderImageList(); 
+            generateStitchedBase();
+
+            if (isReplace) {
+                views.home.classList.remove('active');
+                views.editor.classList.add('active');
+            }
+
+            requestRender();
+            
+            inputs.file.value = '';
+            inputs.addFile.value = '';
+
+        } catch (err) {
+            console.error(err);
+            showToast('图片加载失败', true);
+        } finally {
+            toggleLoading(false);
+        }
+    }
+
+    function recalculateDimensions() {
+        if (originalImageObjects.length === 0) return;
+        maxImageWidth = 0;
+        originalImageObjects.forEach(img => {
+            if (img.width > maxImageWidth) maxImageWidth = img.width;
+        });
+        selectedImages = originalImageObjects.map(img => {
+            const ratio = img.height / img.width;
+            const newHeight = maxImageWidth * ratio;
+            return {
+                img: img,
+                width: maxImageWidth,
+                height: newHeight
+            };
+        });
+        updateResolutionDisplay();
+    }
+
+    function handleCustomBgSelection(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        toggleLoading(true);
+        const img = new Image();
+        img.onload = () => {
+            customBgImage = img;
+            if (appState.mode === 'custom') requestRender();
+            toggleLoading(false);
+        };
+        img.onerror = () => {
+            toggleLoading(false);
+            showToast('背景图片加载失败', true);
+        };
+        img.src = URL.createObjectURL(file);
+    }
+
+    function generateStitchedBase() {
+        if (selectedImages.length === 0) return;
+        const totalHeight = selectedImages.reduce((sum, item) => sum + item.height, 0);
+        
+        // OPTIMIZATION: Use Canvas directly, do NOT convert to DataURL/Image
+        const canvas = document.createElement('canvas');
+        canvas.width = maxImageWidth;
+        canvas.height = totalHeight;
+        const ctx = canvas.getContext('2d');
+        
+        // Fast draw
+        let currentY = 0;
+        selectedImages.forEach(item => {
+            ctx.drawImage(item.img, 0, currentY, maxImageWidth, item.height);
+            currentY += item.height;
+        });
+        
+        stitchedImage = canvas; // Save Canvas Element
+    }
+
+    // --- Core Logic: Rendering ---
+
+    function renderPreview(isExport = false) {
+        if (selectedImages.length === 0) return;
+
+        const canvas = inputs.previewCanvas;
+        const ctx = canvas.getContext('2d');
+
+        const dim = getLogicalDimensions();
+        const finalWidth = dim.w;
+        const finalHeight = dim.h;
+        const borderWidth = maxImageWidth * (appState.borderWidthRatio / 100);
+
+        let renderScale = 1.0;
+        
+        if (isExport) {
+            renderScale = appState.exportScale / 100;
+        } else {
+            const MAX_PREVIEW_WIDTH = 1080;
+            if (finalWidth > MAX_PREVIEW_WIDTH) {
+                renderScale = MAX_PREVIEW_WIDTH / finalWidth;
+            }
+        }
+
+        canvas.width = finalWidth * renderScale;
+        canvas.height = finalHeight * renderScale;
+
+        ctx.save();
+        ctx.scale(renderScale, renderScale);
+
+        if (appState.mode === 'solid') {
+            ctx.fillStyle = appState.solidColor;
+            ctx.fillRect(0, 0, finalWidth, finalHeight);
+        } else {
+            let bgSource = (appState.mode === 'custom' && customBgImage) ? customBgImage : stitchedImage;
+            
+            // bgSource can be Image or Canvas, both work with drawImage
+            if (bgSource) {
+                ctx.save();
+                ctx.fillStyle = '#000';
+                ctx.fillRect(0,0, finalWidth, finalHeight);
+
+                const bgRatio = bgSource.width / bgSource.height;
+                const canvasRatio = finalWidth / finalHeight;
+                
+                let drawW, drawH;
+                if (canvasRatio > bgRatio) {
+                    drawW = finalWidth;
+                    drawH = finalWidth / bgRatio;
+                } else {
+                    drawH = finalHeight;
+                    drawW = finalHeight * bgRatio;
+                }
+
+                const scaleMult = appState.scale / 100;
+                drawW *= scaleMult;
+                drawH *= scaleMult;
+
+                const offsetX = (finalWidth / 2) * (appState.posX / 100);
+                const offsetY = (finalHeight / 2) * (appState.posY / 100);
+
+                const centerX = finalWidth / 2 + offsetX;
+                const centerY = finalHeight / 2 + offsetY;
+                const targetX = centerX - (drawW / 2);
+                const targetY = centerY - (drawH / 2);
+
+                let filterEffects = [];
+                if (appState.blur > 0) {
+                    const blurRadius = (appState.blur * (finalWidth/1000)) * renderScale; 
+                    filterEffects.push(`blur(${blurRadius}px)`);
+                }
+                if (appState.saturation !== 100) {
+                    filterEffects.push(`saturate(${appState.saturation}%)`);
+                }
+
+                if (filterEffects.length > 0) ctx.filter = filterEffects.join(' ');
+
+                ctx.drawImage(bgSource, targetX, targetY, drawW, drawH);
+                ctx.filter = 'none';
+
+                if (appState.brightness !== 0) {
+                    ctx.globalCompositeOperation = 'source-over';
+                    if (appState.brightness < 0) {
+                        ctx.fillStyle = `rgba(0,0,0,${Math.abs(appState.brightness) / 100})`;
+                    } else {
+                        ctx.fillStyle = `rgba(255,255,255,${appState.brightness / 100})`;
+                    }
+                    ctx.fillRect(0, 0, finalWidth, finalHeight);
+                }
+                ctx.restore();
+            } else {
+                ctx.fillStyle = '#333';
+                ctx.fillRect(0, 0, finalWidth, finalHeight);
+            }
+        }
+
+        let currentY = borderWidth;
+        selectedImages.forEach(imgData => {
+            ctx.drawImage(imgData.img, borderWidth, currentY, maxImageWidth, imgData.height);
+            currentY += (imgData.height + borderWidth);
+        });
+
+        ctx.restore();
+    }
+
+    // --- Save / Export ---
+
+    function handleSave() {
+        if (!selectedImages.length) return;
+
+        toggleLoading(true);
+
+        setTimeout(() => {
+            renderPreview(true);
+            
+            const canvas = inputs.previewCanvas;
+            const link = document.createElement('a');
+            
+            const now = new Date();
+            const timestamp = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}${String(now.getSeconds()).padStart(2,'0')}`;
+            
+            link.download = `PinPic-${timestamp}.jpg`;
+            const qualityVal = Math.max(0.1, Math.min(1.0, appState.exportQuality / 100));
+            link.href = canvas.toDataURL('image/jpeg', qualityVal);
+            
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+            requestRender();
+
+            toggleLoading(false);
+            showToast('输出已完成', false);
+
+            inputs.btnHome.classList.remove('hidden');
+        }, 300); 
+    }
+
+    // --- Utilities ---
+
+    function toggleLoading(show) {
+        if (show) inputs.loading.classList.remove('hidden');
+        else inputs.loading.classList.add('hidden');
+    }
+
+    function showToast(msg, isError = false) {
+        const toast = document.getElementById('toast');
+        document.getElementById('toast-msg').innerText = msg;
+        if (isError) {
+            toast.querySelector('svg').classList.remove('text-green-400');
+            toast.querySelector('svg').classList.add('text-red-400');
+        } else {
+            toast.querySelector('svg').classList.add('text-green-400');
+            toast.querySelector('svg').classList.remove('text-red-400');
+        }
+
+        toast.style.opacity = '1';
+        toast.style.transform = 'translate(-50%, -20px)';
+        
+        setTimeout(() => {
+            toast.style.opacity = '0';
+            toast.style.transform = 'translate(-50%, 0)';
+        }, 3000);
+    }
+
+    function setupDragDrop() {
+        const zone = views.home;
+        zone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            zone.classList.add('bg-[#333]');
+        });
+        zone.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            zone.classList.remove('bg-[#333]');
+        });
+        zone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            zone.classList.remove('bg-[#333]');
+            if (e.dataTransfer.files.length > 0) {
+                inputs.file.files = e.dataTransfer.files;
+                handleFiles({ target: inputs.file }, true);
+            }
+        });
+    }
+
+    // Run
+    init();
+
+</script>
+</body>
+</html>
