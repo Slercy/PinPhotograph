@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>PinPic</title>
+    <title>PinPhotograph</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- HEIC to JPEG converter (WASM/JS) -->
     <script src="https://unpkg.com/heic2any@0.0.4/dist/heic2any.min.js"></script>
@@ -39,6 +39,7 @@
             background: transparent;
             margin: 10px 0;
             cursor: pointer;
+            touch-action: pan-y; /* Allow vertical scroll without triggering slider */
         }
         input[type=range]:focus { outline: none; }
 
@@ -55,10 +56,15 @@
             width: 24px;
             border-radius: 50%;
             background: var(--theme-blue);
-            cursor: pointer;
+            cursor: grab;
             -webkit-appearance: none;
             margin-top: -1px;
             box-shadow: 0 0 2px rgba(0,0,0,0.5);
+            position: relative;
+            z-index: 2;
+        }
+        input[type=range]::-webkit-slider-thumb:active {
+            cursor: grabbing;
         }
 
         input[type=number] {
@@ -75,6 +81,7 @@
         }
 
         /* Loading Animation */
+        /* #loading-indicator { z-index: 9999 !important; } REMOVED to allow inline override */
         .loader-dots { display: flex; justify-content: center; align-items: center; gap: 8px; }
         .loader-dot { width: 12px; height: 12px; border-radius: 50%; background-color: var(--theme-blue); animation: bounce 0.6s infinite alternate; }
         .loader-dot:nth-child(2) { animation-delay: 0.2s; background-color: #4c6ef5; }
@@ -85,12 +92,33 @@
         .screen { display: none; height: 100%; width: 100%; }
         .screen.active { display: flex; }
 
+        /* Smooth Animations */
+        .transition-smooth { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+        .hover-scale:hover { transform: scale(1.02); }
+        .btn-press:active { transform: scale(0.95); }
+        
+        /* Fade In Animation */
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .animate-fade-in { animation: fadeIn 0.4s ease-out forwards; }
+        
+        /* Slide Up Animation for Home */
+        @keyframes slideUp { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }
+        .animate-slide-up { animation: slideUp 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) forwards; }
+        
+        /* Slide Up Animation for Right Panel (Changed from Slide In Right) */
+        @keyframes slideUpPanel { from { opacity: 0; transform: translateY(100%); } to { opacity: 1; transform: translateY(0); } }
+        .animate-slide-up-panel { animation: slideUpPanel 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) forwards; }
+
+        /* Staggered Animation Delays */
+        .delay-100 { animation-delay: 100ms; }
+        .delay-200 { animation-delay: 200ms; }
+        .delay-300 { animation-delay: 300ms; }
+
         .controls-scroll::-webkit-scrollbar { width: 4px; }
         .controls-scroll::-webkit-scrollbar-thumb { background-color: #555; border-radius: 4px; }
 
         /* Prevent horizontal scrollbar / phantom bar in image list; always show vertical bar */
         #image-list-container { overflow-x: hidden; overflow-y: scroll; scrollbar-gutter: stable; -webkit-overflow-scrolling: touch; }
-        /* Style vertical scrollbar for image list to match dark theme */
         #image-list-container::-webkit-scrollbar { width: 10px; height: 0px; }
         #image-list-container::-webkit-scrollbar-track { background: rgba(0,0,0,0.12); border-radius:8px; }
         #image-list-container::-webkit-scrollbar-thumb { background: #555; border-radius: 8px; border: 2px solid rgba(0,0,0,0); background-clip: padding-box; }
@@ -148,7 +176,7 @@
         /* Insert Indicator for sortable list */
         #insert-indicator {
             position: absolute;
-            height: 3px;              /* white insertion line thickness */
+            height: 3px;
             background: #ffffff;
             left: 8px;
             right: 8px;
@@ -162,6 +190,13 @@
         /* Custom Color Picker Modal */
         #color-picker-modal {
             backdrop-filter: blur(10px);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+        #color-picker-modal.active {
+            opacity: 1;
+            pointer-events: auto;
         }
         .picker-gradient-box {
             width: 100%; height: 150px; position: relative;
@@ -184,6 +219,88 @@
             border-radius: 2px;
         }
 
+        /* Image Edit Drawer */
+        #image-edit-drawer, #image-shadow-drawer {
+            position: absolute;
+            top: 0; /* Cover the entire controls area */
+            bottom: 0;
+            left: 0;
+            right: 0;
+            width: 100%;
+            height: 100%; /* Force fill */
+            background-color: #292932;
+            transform: translateY(110%);
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            z-index: 60;
+            border-top: 1px solid #444; 
+            display: flex;
+            flex-direction: column;
+        }
+        #image-edit-drawer.active, #image-shadow-drawer.active {
+            transform: translateY(0);
+        }
+
+        /* Free Mode Handles */
+        .corner-bracket {
+            position: absolute;
+            width: 20px; height: 20px;
+            border: 4px solid #29499d; /* Blue color */
+            z-index: 100;
+            box-shadow: 0 0 0 2px white; /* White outline for visibility */
+            pointer-events: auto; /* Ensure they capture events */
+        }
+        .corner-tl { top: -2px; left: -2px; border-right: 0; border-bottom: 0; cursor: nwse-resize; }
+        .corner-tr { top: -2px; right: -2px; border-left: 0; border-bottom: 0; cursor: nesw-resize; }
+        .corner-bl { bottom: -2px; left: -2px; border-right: 0; border-top: 0; cursor: nesw-resize; }
+        .corner-br { bottom: -2px; right: -2px; border-left: 0; border-top: 0; cursor: nwse-resize; }
+
+        /* Solid selection border for Free Mode */
+        .free-selected {
+            outline: 2px solid #29499d;
+            z-index: 50;
+        }
+
+        /* Layout Mode Switcher */
+        .layout-switch-btn {
+            flex: 1;
+            padding: 8px;
+            text-align: center;
+            font-size: 13px;
+            font-weight: 500;
+            border-radius: 8px;
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+        .layout-switch-btn.active {
+            background-color: #29499d;
+            color: white;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+        .layout-switch-btn.inactive {
+            color: #888;
+        }
+        .layout-switch-btn.inactive:hover {
+            color: #ccc;
+            background-color: rgba(255,255,255,0.05);
+        }
+
+        /* Ratio Button */
+        .ratio-btn {
+            border: 1px solid #555;
+            color: #ccc;
+            background: transparent;
+            border-radius: 6px;
+            padding: 4px 8px;
+            font-size: 12px;
+            transition: all 0.2s;
+        }
+        .ratio-btn.active {
+            border-color: #29499d;
+            background: #29499d20;
+            color: #29499d;
+            font-weight: bold;
+        }
+
         /* --- RESPONSIVE LAYOUT LOGIC --- */
         @media (min-width: 768px) {
             #editor-screen { flex-direction: row !important; }
@@ -195,42 +312,104 @@
 <body class="antialiased">
 
     <!-- 1. HOME SCREEN -->
-    <div id="home-screen" class="screen active flex-col justify-center items-center relative">
-        <h1 class="absolute top-12 text-4xl font-bold tracking-widest text-[#f0f0f0]" style="font-family: 'Courier New', monospace;">PinPic</h1>
-        
-        <div class="flex flex-col items-center space-y-6 w-full px-8">
-            <button id="btn-select-images" class="btn-ripple bg-[#29499d] text-white text-xl font-medium py-4 px-12 rounded-full shadow-lg w-64 hover:bg-[#345ac5] transition-colors">
-                选择图片
-            </button>
-            <p class="text-gray-400 text-sm">请选择 1 到 6 张图片</p>
+    <div id="home-screen" class="screen active flex-col items-center justify-center p-6 relative overflow-hidden">
+        <!-- Background Decoration -->
+        <div class="absolute top-[-20%] left-[-20%] w-[140%] h-[140%] bg-[radial-gradient(circle_at_center,#29499d20_0%,transparent_70%)] pointer-events-none"></div>
+
+        <div class="text-center space-y-8 relative z-10 animate-slide-up">
+            <div class="mb-4">
+                <div class="w-24 h-24 bg-gradient-to-br from-[#29499d] to-[#5c7cfa] rounded-3xl mx-auto flex items-center justify-center shadow-2xl shadow-[#29499d50] transform rotate-3 hover:rotate-6 transition-smooth">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                </div>
+                <h1 class="text-3xl font-bold mt-6 tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-400">PinPhotograph</h1>
+                <p class="text-gray-400 text-sm mt-2 font-light">极简长图拼接工具</p>
+            </div>
+
+            <div class="space-y-4 w-full max-w-xs mx-auto delay-100 animate-slide-up" style="opacity: 0; animation-fill-mode: forwards;">
+                <button id="btn-select-images" class="w-full btn-ripple bg-[#29499d] hover:bg-[#1f3a8a] text-white font-medium py-4 px-6 rounded-2xl shadow-lg shadow-[#29499d40] flex items-center justify-center space-x-3 transition-smooth hover-scale group">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 group-hover:scale-110 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                    </svg>
+                    <span class="text-lg">选择图片</span>
+                </button>
+                
+                <div class="text-xs text-gray-500 pt-4">
+                    支持 JPG / PNG / HEIC 格式
+                </div>
+            </div>
         </div>
         
         <!-- Hidden Inputs -->
         <input type="file" id="file-input" multiple accept="image/*" class="hidden">
+        <input type="file" id="add-file-input" multiple accept="image/*" class="hidden">
         <input type="file" id="custom-bg-input" accept="image/*" class="hidden">
     </div>
 
     <!-- 2. EDITOR SCREEN -->
-    <div id="editor-screen" class="screen flex-col">
+    <!-- bg-[#202025] matches preview color so rounded corners of controls look correct -->
+    <div id="editor-screen" class="screen flex-col relative bg-[#202025]">
         
         <!-- Left/Top: Preview Area -->
-        <div id="preview-container" class="h-[60%] w-full flex items-center justify-center bg-[#202025] p-4 relative overflow-hidden transition-all">
-            <canvas id="preview-canvas" class="shadow-2xl max-w-full max-h-full object-contain"></canvas>
+        <!-- Changed h-[60%] to h-[50%] for mobile portrait to give controls more space -->
+        <div id="preview-container" class="h-[50%] w-full flex items-center justify-center bg-[#202025] p-4 relative overflow-hidden transition-all touch-none">
+            <canvas id="preview-canvas" class="shadow-2xl max-w-full max-h-full object-contain touch-none"></canvas>
         </div>
 
         <!-- Right/Bottom: Controls Area -->
-        <div id="controls-container" class="flex-1 w-full bg-[#292932] flex flex-col rounded-t-[2rem] shadow-[0_-4px_20px_rgba(0,0,0,0.3)] overflow-hidden z-10 border-t border-[#444] transition-all">
+        <div id="controls-container" class="flex-1 w-full bg-[#292932] flex flex-col rounded-t-[2rem] shadow-[0_-4px_20px_rgba(0,0,0,0.3)] overflow-hidden z-10 border-t border-[#444] transition-all relative animate-slide-up-panel" style="animation-delay: 0.2s; opacity: 0;">
             
+            <!-- Top Right Actions (Now inside controls container to fix layout issues) -->
+            <div id="top-actions-container" class="absolute top-4 right-4 z-50 flex items-center space-x-2">
+                <button id="btn-back-home" class="bg-[#3a3a45]/90 backdrop-blur-sm border border-[#555] text-white text-xs font-medium py-2 px-3 rounded-lg shadow hover:bg-[#444] transition-colors">
+                    重新选图
+                </button>
+                <button id="btn-save" class="bg-[#29499d] text-white text-xs font-bold py-2 px-3 rounded-lg shadow hover:bg-[#345ac5] transition-colors flex items-center justify-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                </button>
+            </div>
+
             <!-- Controls Scrollable Content -->
-            <div class="flex-1 overflow-y-auto p-6 space-y-6 controls-scroll pb-20">
+            <!-- Added pt-16 to avoid overlapping with the top-right buttons -->
+            <div class="flex-1 overflow-y-auto p-6 pt-16 space-y-6 controls-scroll pb-20">
                 
+                <!-- Layout Mode Selection -->
+                <div class="bg-[#3a3a45] p-1.5 rounded-xl flex space-x-1 mb-2">
+                    <div id="mode-strip" class="layout-switch-btn active" onclick="switchLayoutMode('strip')">条形拼接</div>
+                    <div id="mode-free" class="layout-switch-btn inactive" onclick="switchLayoutMode('free')">自由位置</div>
+                </div>
+
+                <!-- Free Mode Options -->
+                <div id="opt-free-mode" class="hidden animate-fade-in mb-4">
+                    <div class="flex justify-between items-center mb-2">
+                        <label class="text-xs font-medium text-gray-400">画布比例</label>
+                    </div>
+                    <div class="flex flex-wrap gap-2">
+                        <button class="ratio-btn active" onclick="setAspectRatio(9/16, this)">9:16</button>
+                        <button class="ratio-btn" onclick="setAspectRatio(3/4, this)">3:4</button>
+                        <button class="ratio-btn" onclick="setAspectRatio(1, this)">1:1</button>
+                        <button class="ratio-btn" onclick="setAspectRatio(4/3, this)">4:3</button>
+                        <button class="ratio-btn" onclick="setAspectRatio(16/9, this)">16:9</button>
+                        <button class="ratio-btn" id="btn-ratio-custom" onclick="toggleCustomRatio(this)">自定义</button>
+                    </div>
+                    <!-- Custom Ratio Inputs -->
+                    <div id="custom-ratio-inputs" class="hidden flex items-center gap-2 mt-2">
+                        <input type="number" id="ratio-w" class="bg-[#333] text-white rounded px-2 py-1 w-16 text-center border border-[#555]" placeholder="W" value="9">
+                        <span class="text-gray-400">:</span>
+                        <input type="number" id="ratio-h" class="bg-[#333] text-white rounded px-2 py-1 w-16 text-center border border-[#555]" placeholder="H" value="16">
+                        <button id="btn-apply-ratio" class="bg-[#29499d] text-white rounded px-3 py-1 text-xs font-bold">应用</button>
+                    </div>
+                    <p class="text-[10px] text-gray-500 mt-2">点击选中图片，拖动任意位置移动，拖动四角缩放。</p>
+                </div>
+
                 <!-- Image Management Section -->
                 <div class="bg-[#3a3a45] p-4 rounded-2xl shadow-sm">
                     <div class="flex items-center justify-between mb-3 border-b border-gray-600 pb-2">
                         <span class="text-sm font-medium text-gray-300">图片列表 (<span id="img-count">0</span>)</span>
                         
                         <div class="flex space-x-2">
-                             <button id="btn-add-images" class="btn-ripple bg-[#444] hover:bg-[#555] text-white px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center space-x-1 border border-gray-500">
+                             <button id="btn-add-images" class="btn-ripple bg-[#29499d] hover:bg-[#345ac5] text-white px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center space-x-1 shadow-sm">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
                                 <span>添加</span>
                             </button>
@@ -243,11 +422,11 @@
                         <div id="insert-indicator" aria-hidden="true"></div>
                         <div class="text-center text-xs text-gray-500 py-2">暂无图片</div>
                     </div>
-                    <div class="text-[10px] text-gray-500 mt-2 text-center">长按并拖动图片可调整顺序</div>
+                    <div id="list-hint-text" class="text-[10px] text-gray-500 mt-2 text-center">长按拖拽调整拼接顺序</div>
                 </div>
 
-                <!-- Outer Border Toggle -->
-                <div class="control-group bg-[#3a3a45] p-3 rounded-2xl flex items-center justify-between">
+                <!-- Outer Border Toggle (Only for Strip Mode) -->
+                <div id="ctrl-outer-border" class="control-group bg-[#3a3a45] p-3 rounded-2xl flex items-center justify-between">
                     <label class="text-sm font-medium text-gray-300">四周边框</label>
                     <div class="relative inline-block w-10 h-6 align-middle select-none transition duration-200 ease-in">
                         <input type="checkbox" name="toggle" id="toggle-outer-border" class="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer checked:right-0 right-4"/>
@@ -256,7 +435,7 @@
                 </div>
 
                 <!-- Border Thickness -->
-                <div class="control-group">
+                <div id="ctrl-border-width" class="control-group">
                     <div class="flex justify-between items-center mb-1">
                         <label class="text-sm font-medium text-gray-300">边框宽度</label>
                         <input type="number" id="val-border-width" min="0" max="100" class="w-16">
@@ -266,13 +445,27 @@
                     </div>
                 </div>
 
+                <!-- Global Shadow Control -->
+                <div class="control-group bg-[#3a3a45] p-3 rounded-2xl flex items-center justify-between">
+                    <label class="text-sm font-medium text-gray-300">图片阴影</label>
+                    <div class="flex items-center space-x-3">
+                        <button id="btn-shadow-settings" class="text-xs bg-[#29499d] hover:bg-[#345ac5] text-white px-3 py-1.5 rounded-lg transition-colors hidden shadow-sm font-medium">
+                            设置
+                        </button>
+                        <div class="relative inline-block w-10 h-6 align-middle select-none transition duration-200 ease-in">
+                            <input type="checkbox" id="toggle-shadow" class="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer checked:right-0 right-4"/>
+                            <label for="toggle-shadow" class="toggle-label block overflow-hidden h-6 rounded-full bg-gray-600 cursor-pointer"></label>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Mode Selection -->
                 <div>
                     <label class="text-sm font-medium text-gray-300 block mb-2 pl-1">背景风格</label>
-                    <div class="bg-[#3a3a45] p-2 rounded-2xl flex justify-between space-x-2">
-                        <button class="mode-btn flex-1 py-3 rounded-xl text-sm font-medium transition-all bg-[#29499d] text-white" data-mode="solid">纯色</button>
-                        <button class="mode-btn flex-1 py-3 rounded-xl text-sm font-medium transition-all text-gray-400 hover:text-white" data-mode="self">已选图模糊</button>
-                        <button class="mode-btn flex-1 py-3 rounded-xl text-sm font-medium transition-all text-gray-400 hover:text-white" data-mode="custom">自定义</button>
+                    <div class="bg-[#3a3a45] p-1.5 rounded-xl flex space-x-1">
+                        <button class="mode-btn layout-switch-btn flex-1 py-2" data-mode="solid">纯色</button>
+                        <button class="mode-btn layout-switch-btn flex-1 py-2" data-mode="self">已选图模糊</button>
+                        <button class="mode-btn layout-switch-btn flex-1 py-2" data-mode="custom">自定义</button>
                     </div>
                 </div>
 
@@ -308,17 +501,58 @@
                     
                     <!-- Custom Image Selector -->
                     <div id="custom-img-btn-container" class="hidden">
-                         <button id="btn-select-custom-bg" class="w-full btn-ripple bg-[#444] text-gray-200 text-sm font-medium py-3 px-4 rounded-xl border border-dashed border-gray-500 hover:bg-[#555] flex items-center justify-center space-x-2">
+                         <button id="btn-select-custom-bg" class="w-full btn-ripple bg-[#29499d] text-white text-sm font-medium py-3 px-4 rounded-xl hover:bg-[#345ac5] flex items-center justify-center space-x-2 transition-smooth hover-scale shadow-sm">
                             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
                             <span>更换背景图片</span>
                         </button>
                     </div>
 
+                    <!-- Blend Mode -->
+                    <div id="bg-blend-mode-container" class="bg-[#3a3a45] p-4 rounded-2xl shadow-sm space-y-4 transition-smooth hover:bg-[#40404b]">
+                        <div class="flex items-center space-x-2 border-b border-gray-600 pb-2 mb-2">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
+                            <span class="text-sm font-medium text-gray-300">背景混合模式</span>
+                        </div>
+                        <div class="relative" id="custom-blend-dropdown">
+                            <!-- Hidden Native Select for Logic Compatibility -->
+                            <select id="select-bg-blend-mode" class="hidden">
+                                <option value="screen">滤色</option>
+                                <option value="normal">正常</option>
+                                <option value="darken">变暗</option>
+                                <option value="overlay">叠加</option>
+                                <option value="hard-light">强光</option>
+                                <option value="soft-light">柔光</option>
+                                <option value="color-burn">颜色加深</option>
+                                <option value="color-dodge">颜色减淡</option>
+                                <option value="multiply">正片叠底</option>
+                            </select>
+
+                            <!-- Custom Trigger Button -->
+                            <button id="btn-blend-dropdown" class="w-full bg-[#292932] text-gray-200 text-sm rounded-lg border border-gray-600 p-3 flex justify-between items-center focus:outline-none focus:border-blue-500 transition-smooth hover:border-gray-500">
+                                <span id="blend-dropdown-label">滤色</span>
+                                <svg class="fill-current h-4 w-4 text-gray-400 transition-transform duration-200" id="blend-dropdown-arrow" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
+                            </button>
+
+                            <!-- Custom Dropdown Menu -->
+                            <div id="blend-dropdown-menu" class="hidden absolute z-50 w-full mt-1 bg-[#292932] border border-gray-600 rounded-lg shadow-xl animate-fade-in">
+                                <div class="blend-option px-4 py-3 hover:bg-[#3a3a45] cursor-pointer text-sm text-gray-200 border-b border-gray-700 last:border-0 transition-colors" data-value="screen">滤色</div>
+                                <div class="blend-option px-4 py-3 hover:bg-[#3a3a45] cursor-pointer text-sm text-gray-200 border-b border-gray-700 last:border-0 transition-colors" data-value="normal">正常</div>
+                                <div class="blend-option px-4 py-3 hover:bg-[#3a3a45] cursor-pointer text-sm text-gray-200 border-b border-gray-700 last:border-0 transition-colors" data-value="darken">变暗</div>
+                                <div class="blend-option px-4 py-3 hover:bg-[#3a3a45] cursor-pointer text-sm text-gray-200 border-b border-gray-700 last:border-0 transition-colors" data-value="overlay">叠加</div>
+                                <div class="blend-option px-4 py-3 hover:bg-[#3a3a45] cursor-pointer text-sm text-gray-200 border-b border-gray-700 last:border-0 transition-colors" data-value="hard-light">强光</div>
+                                <div class="blend-option px-4 py-3 hover:bg-[#3a3a45] cursor-pointer text-sm text-gray-200 border-b border-gray-700 last:border-0 transition-colors" data-value="soft-light">柔光</div>
+                                <div class="blend-option px-4 py-3 hover:bg-[#3a3a45] cursor-pointer text-sm text-gray-200 border-b border-gray-700 last:border-0 transition-colors" data-value="color-burn">颜色加深</div>
+                                <div class="blend-option px-4 py-3 hover:bg-[#3a3a45] cursor-pointer text-sm text-gray-200 border-b border-gray-700 last:border-0 transition-colors" data-value="color-dodge">颜色减淡</div>
+                                <div class="blend-option px-4 py-3 hover:bg-[#3a3a45] cursor-pointer text-sm text-gray-200 border-b border-gray-700 last:border-0 transition-colors" data-value="multiply">正片叠底</div>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Blur -->
-                    <div>
+                    <div class="transition-smooth hover:bg-[#3a3a45] p-2 rounded-xl -mx-2">
                         <div class="flex justify-between items-center mb-1">
                             <label class="text-sm font-medium text-gray-300">模糊程度</label>
-                            <input type="number" id="val-blur" min="0" max="100" class="w-16">
+                            <input type="number" id="val-blur" min="0" max="100" class="w-16 transition-smooth focus:border-blue-500">
                         </div>
                         <div class="flex items-center space-x-4">
                             <input type="range" id="slider-blur" min="0" max="100" class="flex-1">
@@ -326,10 +560,10 @@
                     </div>
 
                     <!-- Saturation -->
-                    <div>
+                    <div class="transition-smooth hover:bg-[#3a3a45] p-2 rounded-xl -mx-2">
                         <div class="flex justify-between items-center mb-1">
                             <label class="text-sm font-medium text-gray-300">背景饱和度</label>
-                            <input type="number" id="val-saturation" min="0" max="500" class="w-16">
+                            <input type="number" id="val-saturation" min="0" max="500" class="w-16 transition-smooth focus:border-blue-500">
                         </div>
                         <div class="flex items-center space-x-4">
                             <input type="range" id="slider-saturation" min="0" max="500" value="100" class="flex-1">
@@ -337,10 +571,10 @@
                     </div>
 
                     <!-- Brightness -->
-                    <div>
+                    <div class="transition-smooth hover:bg-[#3a3a45] p-2 rounded-xl -mx-2">
                         <div class="flex justify-between items-center mb-1">
                             <label class="text-sm font-medium text-gray-300">背景深浅</label>
-                            <input type="number" id="val-brightness" min="-100" max="100" class="w-16">
+                            <input type="number" id="val-brightness" min="-100" max="100" class="w-16 transition-smooth focus:border-blue-500">
                         </div>
                         <div class="flex items-center space-x-4">
                             <input type="range" id="slider-brightness" min="-100" max="100" class="flex-1">
@@ -348,10 +582,10 @@
                     </div>
 
                     <!-- Scale -->
-                    <div>
+                    <div class="transition-smooth hover:bg-[#3a3a45] p-2 rounded-xl -mx-2">
                         <div class="flex justify-between items-center mb-1">
                             <label class="text-sm font-medium text-gray-300">缩放背景</label>
-                            <input type="number" id="val-scale" min="100" max="500" class="w-16">
+                            <input type="number" id="val-scale" min="100" max="500" class="w-16 transition-smooth focus:border-blue-500">
                         </div>
                         <div class="flex items-center space-x-4">
                             <input type="range" id="slider-scale" min="100" max="500" value="100" class="flex-1">
@@ -359,20 +593,23 @@
                     </div>
 
                     <!-- Position -->
-                    <div class="bg-[#3a3a45] p-3 rounded-2xl">
-                        <label class="text-sm font-medium text-gray-300 block mb-2">调整位置</label>
+                    <div class="bg-[#3a3a45] p-4 rounded-2xl shadow-sm space-y-4 transition-smooth hover:bg-[#40404b]">
+                        <div class="flex items-center space-x-2 pb-2 mb-2">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" /></svg>
+                            <span class="text-sm font-medium text-gray-300">调整位置</span>
+                        </div>
                         <div class="grid grid-cols-1 gap-4">
                             <!-- X Axis -->
                             <div class="flex items-center space-x-2">
                                 <span class="text-xs text-gray-400 w-8">水平</span>
                                 <input type="range" id="slider-pos-x" min="-100" max="100" value="0" class="flex-1">
-                                <input type="number" id="val-pos-x" min="-100" max="100" class="w-14">
+                                <input type="number" id="val-pos-x" min="-100" max="100" class="w-14 transition-smooth focus:border-blue-500">
                             </div>
                             <!-- Y Axis -->
                             <div class="flex items-center space-x-2">
                                 <span class="text-xs text-gray-400 w-8">垂直</span>
                                 <input type="range" id="slider-pos-y" min="-100" max="100" value="0" class="flex-1">
-                                <input type="number" id="val-pos-y" min="-100" max="100" class="w-14">
+                                <input type="number" id="val-pos-y" min="-100" max="100" class="w-14 transition-smooth focus:border-blue-500">
                             </div>
                         </div>
                     </div>
@@ -380,17 +617,17 @@
                 </div>
 
                 <!-- Export Settings -->
-                <div class="bg-[#333] p-4 rounded-2xl mt-8 border border-gray-700 space-y-4">
-                    <div class="flex items-center space-x-2 border-b border-gray-600 pb-2 mb-2">
+                <div class="bg-[#3a3a45] p-4 rounded-2xl mt-8 shadow-sm space-y-4 transition-smooth hover:bg-[#40404b] animate-fade-in">
+                    <div class="flex items-center space-x-2 pb-2 mb-2">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-                        <span class="text-sm font-bold text-gray-300">导出设置</span>
+                        <span class="text-sm font-medium text-gray-300">导出设置</span>
                     </div>
 
                     <!-- Quality -->
                     <div>
                         <div class="flex justify-between items-center mb-1">
                             <label class="text-xs font-medium text-gray-400">JPG 画质 (压缩率)</label>
-                            <span id="val-quality-display" class="text-xs text-[#29499d] font-bold bg-[#29499d20] px-2 py-0.5 rounded">95%</span>
+                            <input type="number" id="val-quality" min="10" max="100" class="w-16 transition-smooth focus:border-blue-500">
                         </div>
                         <input type="range" id="slider-quality" min="10" max="100" value="95">
                     </div>
@@ -399,9 +636,9 @@
                     <div>
                         <div class="flex justify-between items-center mb-1">
                             <label class="text-xs font-medium text-gray-400">分辨率缩放</label>
-                            <span id="val-res-scale-display" class="text-xs text-[#29499d] font-bold bg-[#29499d20] px-2 py-0.5 rounded">100%</span>
+                            <input type="number" id="val-res-scale" min="5" max="100" class="w-16 transition-smooth focus:border-blue-500">
                         </div>
-                        <input type="range" id="slider-res-scale" min="10" max="100" value="100">
+                        <input type="range" id="slider-res-scale" min="5" max="100" value="10">
                         <div class="text-center mt-1">
                             <span id="resolution-pixel-display" class="text-xs font-mono text-gray-500">计算中...</span>
                         </div>
@@ -411,20 +648,133 @@
                 <div class="h-12"></div> <!-- Spacer -->
             </div>
 
-            <!-- Footer Buttons -->
-            <div class="p-4 bg-[#292932] border-t border-[#444] flex flex-col space-y-3 z-20">
-                <button id="btn-save" class="btn-ripple w-full bg-[#29499d] text-white font-bold py-3 rounded-full text-lg shadow-lg hover:bg-[#345ac5] transition-colors flex items-center justify-center">
-                    <span>生成并保存</span>
-                </button>
-                <button id="btn-back-home" class="hidden w-full bg-transparent border border-[#555] text-gray-300 font-medium py-3 rounded-full text-lg hover:bg-[#3a3a45] transition-colors">
-                    回到主界面
-                </button>
+            <!-- PER-IMAGE EDIT DRAWER -->
+            <div id="image-edit-drawer" class="p-6">
+                <div class="flex justify-between items-center mb-6 pt-8">
+                    <h3 class="text-white font-bold text-lg">编辑图片 <span id="drawer-img-index" class="text-sm font-normal text-gray-400 ml-2"></span></h3>
+                    <button id="btn-close-drawer" class="text-gray-400 hover:text-white p-2 bg-[#3a3a45] rounded-full">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                    </button>
+                </div>
+                
+                <div class="space-y-6 overflow-y-auto pb-4">
+                    <!-- Saturation -->
+                    <div>
+                        <div class="flex justify-between items-center mb-1">
+                            <label class="text-sm font-medium text-gray-300">饱和度</label>
+                            <input type="number" id="drawer-val-sat" min="0" max="200" class="w-16">
+                        </div>
+                        <input type="range" id="drawer-slider-sat" min="0" max="200" value="100">
+                    </div>
+                    
+                    <!-- Brightness (Exposure) -->
+                    <div>
+                        <div class="flex justify-between items-center mb-1">
+                            <label class="text-sm font-medium text-gray-300">曝光度</label>
+                            <input type="number" id="drawer-val-bri" min="-100" max="100" class="w-16">
+                        </div>
+                        <input type="range" id="drawer-slider-bri" min="-100" max="100" value="0">
+                    </div>
+                    
+                    <!-- Contrast -->
+                    <div>
+                        <div class="flex justify-between items-center mb-1">
+                            <label class="text-sm font-medium text-gray-300">对比度</label>
+                            <input type="number" id="drawer-val-con" min="0" max="200" class="w-16">
+                        </div>
+                        <input type="range" id="drawer-slider-con" min="0" max="200" value="100">
+                    </div>
+                </div>
             </div>
-        </div>
-    </div>
+
+            <!-- PER-IMAGE SHADOW DRAWER -->
+            <div id="image-shadow-drawer" class="p-6">
+                <div class="flex justify-between items-center mb-6 pt-8">
+                    <h3 class="text-white font-bold text-lg">图片阴影 <span id="drawer-shadow-index" class="text-sm font-normal text-gray-400 ml-2"></span></h3>
+                    <button id="btn-close-shadow" class="text-gray-400 hover:text-white p-2 bg-[#3a3a45] rounded-full">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                    </button>
+                </div>
+                
+                <div class="space-y-6 overflow-y-auto pb-4">
+                    <!-- Opacity -->
+                    <div>
+                        <div class="flex justify-between items-center mb-1">
+                            <label class="text-sm font-medium text-gray-300">不透明度</label>
+                            <input type="number" id="drawer-val-s-opacity" min="0" max="1" step="0.05" class="w-16 bg-[#333] text-white rounded px-2 py-1 text-right border border-[#444]">
+                        </div>
+                        <input type="range" id="drawer-slider-s-opacity" min="0" max="1" step="0.05" value="0.5" class="w-full h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer">
+                    </div>
+
+                    <!-- Size (Spread) -->
+                    <div>
+                        <div class="flex justify-between items-center mb-1">
+                            <label class="text-sm font-medium text-gray-300">大小</label>
+                            <input type="number" id="drawer-val-s-size" min="0" max="200" class="w-16 bg-[#333] text-white rounded px-2 py-1 text-right border border-[#444]">
+                        </div>
+                        <input type="range" id="drawer-slider-s-size" min="0" max="200" value="0" class="w-full h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer">
+                    </div>
+
+                    <!-- Blur -->
+                    <div>
+                        <div class="flex justify-between items-center mb-1">
+                            <label class="text-sm font-medium text-gray-300">模糊</label>
+                            <input type="number" id="drawer-val-s-blur" min="0" max="100" class="w-16 bg-[#333] text-white rounded px-2 py-1 text-right border border-[#444]">
+                        </div>
+                        <input type="range" id="drawer-slider-s-blur" min="0" max="100" value="0" class="w-full h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer">
+                    </div>
+                    
+                    <!-- Distance -->
+                    <div>
+                        <div class="flex justify-between items-center mb-1">
+                            <label class="text-sm font-medium text-gray-300">距离</label>
+                            <input type="number" id="drawer-val-s-dist" min="0" max="100" class="w-16 bg-[#333] text-white rounded px-2 py-1 text-right border border-[#444]">
+                        </div>
+                        <input type="range" id="drawer-slider-s-dist" min="0" max="100" value="0" class="w-full h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer">
+                    </div>
+                    
+                    <!-- Angle -->
+                    <div>
+                        <div class="flex justify-between items-center mb-1">
+                            <label class="text-sm font-medium text-gray-300">角度</label>
+                            <input type="number" id="drawer-val-s-angle" min="0" max="360" class="w-16 bg-[#333] text-white rounded px-2 py-1 text-right border border-[#444]">
+                        </div>
+                        <input type="range" id="drawer-slider-s-angle" min="0" max="360" value="0" class="w-full h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer">
+                    </div>
+
+                    <!-- Color -->
+                    <div>
+                        <div class="flex justify-between items-center mb-1">
+                            <label class="text-sm font-medium text-gray-300">颜色</label>
+                        </div>
+                        
+                        <!-- Presets -->
+                        <div class="flex flex-wrap gap-3 mb-4 justify-start" id="shadow-color-presets">
+                            <!-- Will be populated by JS -->
+                        </div>
+
+                        <!-- Custom Input Row -->
+                        <div class="flex items-center justify-between border-t border-gray-600 pt-3">
+                            <div class="flex items-center space-x-3 cursor-pointer" id="btn-shadow-picker">
+                                 <div class="relative w-10 h-10 rainbow-ring">
+                                     <div class="rainbow-inner">
+                                        <div id="shadow-color-preview" class="w-6 h-6 rounded-full bg-black shadow-sm border border-gray-400"></div>
+                                     </div>
+                                 </div>
+                                 <span class="text-xs text-gray-400">点击调色</span>
+                            </div>
+                            
+                            <div class="flex items-center bg-[#292932] rounded-lg px-3 py-1 border border-gray-600">
+                                <span class="text-gray-400 mr-2">#</span>
+                                <input type="text" id="shadow-color-hex" value="000000" class="bg-transparent border-none text-white w-16 text-sm font-mono focus:outline-none uppercase" maxlength="6">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
 
     <!-- CUSTOM COLOR PICKER MODAL -->
-    <div id="color-picker-modal" class="hidden fixed inset-0 z-[60] flex items-center justify-center bg-black/50">
+    <div id="color-picker-modal" class="hidden fixed inset-0 z-[80] flex items-center justify-center bg-black/50">
         <div class="bg-[#292932] p-4 rounded-2xl w-80 shadow-2xl border border-gray-600">
             <h3 class="text-white text-lg font-bold mb-4">选择颜色</h3>
             
@@ -453,84 +803,87 @@
     </div>
 
     <!-- Global Loading Indicator -->
-    <div id="loading-indicator" class="hidden fixed inset-0 bg-[#000000cc] flex flex-col items-center justify-center text-white z-[100] backdrop-blur-md transition-all duration-300">
-        <div class="loader-dots mb-6">
-            <div class="loader-dot"></div>
-            <div class="loader-dot"></div>
-            <div class="loader-dot"></div>
+    <div id="loading-indicator" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.8); z-index: 2147483647; flex-direction: column; align-items: center; justify-content: center; color: white;">
+        <div class="loader-dots" style="display: flex; gap: 8px; margin-bottom: 24px;">
+            <div class="loader-dot" style="width: 12px; height: 12px; border-radius: 50%; background-color: #29499d; animation: bounce 0.6s infinite alternate;"></div>
+            <div class="loader-dot" style="width: 12px; height: 12px; border-radius: 50%; background-color: #4c6ef5; animation: bounce 0.6s infinite alternate; animation-delay: 0.2s;"></div>
+            <div class="loader-dot" style="width: 12px; height: 12px; border-radius: 50%; background-color: #748ffc; animation: bounce 0.6s infinite alternate; animation-delay: 0.4s;"></div>
         </div>
-        <span class="text-base font-medium tracking-widest opacity-90 animate-pulse">正在处理...</span>
+        <span style="font-size: 16px; letter-spacing: 2px; opacity: 0.9;">正在处理...</span>
     </div>
 
 <script>
     /**
-     * PinPic Logic
+     * PinPhotograph Logic v2.1
      */
 
     // --- Constants ---
-    /**
-     * 颜色预设数组。
-     * 在 UI 中显示为色样，便于用户快速选择常用底色。
-     * @constant {string[]}
-     */
-    // 20 Morandi Colors (Reordered for visual harmony) + Black/White
     const COLOR_PRESETS = [
-        '#FFFFFF', // White
-        '#F2E6CE', // Cream
-        '#E6D0B4', // Sand
-        '#E0CDCF', // Dusty Pink
-        '#D9988D', // Muted Coral
-        '#A65E5E', // Rust
-        '#B09B87', // Clay
-        '#B3A69F', // Taupe
-        '#8D8782', // Greyish Brown
-        '#8C7B75', // Mocha
-        '#A4B0BE', // Mist Blue
-        '#99A8B2', // Haze Blue
-        '#5B7C99', // Denim Grey
-        '#778899', // Slate Grey
-        '#C3C2D3', // Lavender Grey
-        '#B4C7C2', // Silver Sage
-        '#8FA395', // Sage Green
-        '#C6D6A8', // Matcha
-        '#707C74', // Olive Green
-        '#000000'  // Black
+        '#FFFFFF', '#F2E6CE', '#E6D0B4', '#E0CDCF', '#D9988D',
+        '#A65E5E', '#B09B87', '#B3A69F', '#8D8782', '#8C7B75',
+        '#A4B0BE', '#99A8B2', '#5B7C99', '#778899', '#C3C2D3',
+        '#B4C7C2', '#8FA395', '#C6D6A8', '#707C74', '#000000'
     ];
 
     // --- State Management ---
-    /**
-     * 应用默认状态。
-     * 该对象在首次运行时作为默认设置，后续会被保存在 localStorage（通过 saveSettings）。
-     * @type {Object}
-     */
     const defaultState = {
-        borderWidthRatio: 5, 
-        outerBorder: true, // New: Outer Border Toggle
+        layoutMode: 'strip', // 'strip' or 'free'
+        canvasRatio: 9/16,
+        borderWidthRatio: 10, 
+        outerBorder: true,
         mode: 'solid',
         solidColor: '#ffffff',
         blur: 20,
         saturation: 100,
         brightness: -20,
-        scale: 100,
+        scale: 100, // Legacy, now used as current active scale
+        scaleFree: 100, // New: Scale for Free Mode
+        scaleStrip: 100, // New: Scale for Strip Mode
         posX: 0,
         posY: 0,
+        bgBlendMode: 'screen',
         exportQuality: 95,
-        exportScale: 100
+        exportScale: 10,
+        shadow: { enabled: false, blur: 20, distance: 10, angle: 45, size: 0, opacity: 0.5, color: '#000000' }
     };
 
-    let appState = JSON.parse(localStorage.getItem('pinpic_settings')) || { ...defaultState };
-    
+    let appState = JSON.parse(localStorage.getItem('pinphotograph_settings')) || { ...defaultState };
+    // Ensure default scale is 10 if not set or if it was the old default 100 (optional, but safer to just respect saved or default)
+    if (appState.exportScale === undefined) appState.exportScale = 10;
+    if (appState.scaleFree === undefined) appState.scaleFree = 100;
+    if (appState.scaleStrip === undefined) appState.scaleStrip = 100;
+    if(!appState.shadow) appState.shadow = { enabled: false, blur: 20, distance: 10, angle: 45, size: 0, opacity: 0.5, color: '#000000' }; // Migration
+    // Migration for old shadow format
+    if (appState.shadow.x !== undefined) {
+        appState.shadow.distance = Math.sqrt(appState.shadow.x**2 + appState.shadow.y**2) || 10;
+        appState.shadow.angle = (Math.atan2(appState.shadow.y, appState.shadow.x) * 180 / Math.PI + 360) % 360 || 45;
+        appState.shadow.size = 0;
+        delete appState.shadow.x;
+        delete appState.shadow.y;
+    }
+    if(!appState.layoutMode) appState.layoutMode = 'strip'; // Migration
+    if(!appState.canvasRatio) appState.canvasRatio = 9/16; // Migration
+    if(!appState.bgBlendMode) appState.bgBlendMode = 'screen'; // Migration
+
     // Runtime Data
-    let selectedImages = []; 
-    let originalImageObjects = []; 
-    let stitchedImage = null; // Canvas element
+    // item: { img: Image, width, height, edit: {sat,bri,con}, free: {x, y, w, h} }
+    let selectedImages = []; // Computed from original
+    let originalImageObjects = []; // Source truth
+    
+    let stitchedImage = null; // Canvas element for "Self Blur" background source
     let customBgImage = null; 
     let maxImageWidth = 0;
     
     let renderRequestId = null;
+    let currentlyEditingIndex = -1;
+    
+    // Free Mode Interaction State
+    let activeImageIndex = -1; // -1 means none
+    let interactionState = null; // { type: 'move'|'resize', startX, startY, startParam, handle }
+    let snapGuides = []; // Array of { type: 'v'|'h', pos: number }
 
     // Color Picker Runtime
-    let cpState = { hue: 0, sat: 0, val: 100 }; // H(0-360), S(0-100), V(0-100)
+    let cpState = { hue: 0, sat: 0, val: 100 }; 
 
     // DOM Elements
     const views = {
@@ -545,7 +898,6 @@
         borderWidthSlider: document.getElementById('slider-border-width'),
         borderWidthNum: document.getElementById('val-border-width'),
         
-        // Custom Picker Elements
         btnOpenPicker: document.getElementById('btn-open-picker'),
         pickerModal: document.getElementById('color-picker-modal'),
         pickerSvBox: document.getElementById('cp-sv-box'),
@@ -560,6 +912,7 @@
         presetsContainer: document.getElementById('color-presets-container'),
         
         toggleOuterBorder: document.getElementById('toggle-outer-border'),
+        ctrlOuterBorder: document.getElementById('ctrl-outer-border'),
         
         modeBtns: document.querySelectorAll('.mode-btn'),
         blurSlider: document.getElementById('slider-blur'),
@@ -579,8 +932,11 @@
         resScaleSlider: document.getElementById('slider-res-scale'),
         resScaleDisplay: document.getElementById('val-res-scale-display'),
         resPixelDisplay: document.getElementById('resolution-pixel-display'),
+        
         secSolid: document.getElementById('opt-solid'),
         secBgControls: document.getElementById('opt-bg-controls'),
+        optFreeMode: document.getElementById('opt-free-mode'),
+        
         btnCustomBg: document.getElementById('custom-img-btn-container'),
         btnAddImages: document.getElementById('btn-add-images'),
         btnSave: document.getElementById('btn-save'),
@@ -588,29 +944,40 @@
         previewCanvas: document.getElementById('preview-canvas'),
         loading: document.getElementById('loading-indicator'),
         imgCount: document.getElementById('img-count'),
-        imageListContainer: document.getElementById('image-list-container')
-        ,insertIndicator: document.getElementById('insert-indicator')
+        imageListContainer: document.getElementById('image-list-container'),
+        insertIndicator: document.getElementById('insert-indicator'),
+
+        // Image Edit Drawer
+        drawer: document.getElementById('image-edit-drawer'),
+        drawerIndex: document.getElementById('drawer-img-index'),
+        btnCloseDrawer: document.getElementById('btn-close-drawer'),
+        dSatSlider: document.getElementById('drawer-slider-sat'),
+        dSatNum: document.getElementById('drawer-val-sat'),
+        dBriSlider: document.getElementById('drawer-slider-bri'),
+        dBriNum: document.getElementById('drawer-val-bri'),
+        dConSlider: document.getElementById('drawer-slider-con'),
+        dConNum: document.getElementById('drawer-val-con'),
+        
+        // Shadow Edit Drawer
+        shadowDrawer: document.getElementById('image-shadow-drawer'),
+        btnShadowPicker: document.getElementById('btn-shadow-picker'),
     };
 
-    // --- 初始化 ---
-    /**
-     * 初始化应用。
-     * - 渲染颜色预设
-     * - 恢复 UI 状态
-     * - 绑定事件监听器
-     * - 初始化拖放与调色盘
-     */
     function init() {
         renderColorPresets(); 
         restoreUIFromState();
         setupEventListeners();
-        setupDragDrop();
+        setupDragDrop(); // Note: setupDragDrop is not defined in the snippets I read, but setupEventListeners calls handleDragOver etc. Maybe it's a separate function or just part of setupEventListeners?
+        // Wait, I see setupDragDrop() call in init() in my thought, but did I see the definition?
+        // In the first read, I saw init() calling setupDragDrop().
+        // But I didn't see setupDragDrop definition.
+        // Ah, lines 1200-2000 covered setupEventListeners.
+        // I'll just add setupShadowListeners() at the end of init().
+        setupCanvasInteraction();
         setupCustomColorPicker();
+        setupShadowListeners();
     }
 
-    /**
-     * 渲染颜色预设面板，并缓存预设元素集合到 `inputs.presets`。
-     */
     function renderColorPresets() {
         inputs.presetsContainer.innerHTML = '';
         COLOR_PRESETS.forEach(color => {
@@ -624,16 +991,10 @@
         inputs.presets = document.querySelectorAll('.color-preset');
     }
 
-    /**
-     * 将当前 `appState` 序列化并保存到 localStorage。
-     */
     function saveSettings() {
-        localStorage.setItem('pinpic_settings', JSON.stringify(appState));
+        localStorage.setItem('pinphotograph_settings', JSON.stringify(appState));
     }
 
-    /**
-     * 请求下一帧更新预览（防抖）。
-     */
     function requestRender() {
         if (renderRequestId) cancelAnimationFrame(renderRequestId);
         renderRequestId = requestAnimationFrame(() => {
@@ -642,14 +1003,11 @@
         });
     }
 
-    /**
-     * 从 `appState` 恢复 UI 控件的值（在初始化时调用）。
-     */
     function restoreUIFromState() {
         inputs.borderWidthSlider.value = appState.borderWidthRatio;
         inputs.borderWidthNum.value = appState.borderWidthRatio;
         updateColorUI(appState.solidColor);
-        inputs.toggleOuterBorder.checked = appState.outerBorder !== false; // default true
+        inputs.toggleOuterBorder.checked = appState.outerBorder !== false;
         
         inputs.blurSlider.value = appState.blur;
         inputs.blurNum.value = appState.blur;
@@ -657,26 +1015,42 @@
         inputs.satNum.value = appState.saturation;
         inputs.brightSlider.value = appState.brightness;
         inputs.brightNum.value = appState.brightness;
-        inputs.scaleSlider.value = appState.scale;
-        inputs.scaleNum.value = appState.scale;
+        
+        const currentScale = appState.layoutMode === 'free' ? appState.scaleFree : appState.scaleStrip;
+        inputs.scaleSlider.value = currentScale;
+        inputs.scaleNum.value = currentScale;
+
         inputs.posX.value = appState.posX;
         inputs.posXNum.value = appState.posX;
         inputs.posY.value = appState.posY;
         inputs.posYNum.value = appState.posY;
         inputs.qualitySlider.value = appState.exportQuality;
-        inputs.qualityDisplay.textContent = appState.exportQuality + '%';
+        document.getElementById('val-quality').value = appState.exportQuality;
         inputs.resScaleSlider.value = appState.exportScale;
-        inputs.resScaleDisplay.textContent = appState.exportScale + '%';
+        document.getElementById('val-res-scale').value = appState.exportScale;
+        
+        const blendModeSelect = document.getElementById('select-bg-blend-mode');
+        if (blendModeSelect) {
+            blendModeSelect.value = appState.bgBlendMode || 'screen';
+        }
+
+        // Fix: Restore Shadow UI state
+        const shadowToggle = document.getElementById('toggle-shadow');
+        if (shadowToggle && appState.shadow) {
+            shadowToggle.checked = appState.shadow.enabled;
+            const btn = document.getElementById('btn-shadow-settings');
+            if (btn) {
+                if (appState.shadow.enabled) btn.classList.remove('hidden');
+                else btn.classList.add('hidden');
+            }
+        }
+
+        updateLayoutModeUI();
         updateModeUI(appState.mode);
     }
 
-    /**
-     * 应用十六进制颜色到界面并更新状态。
-     * @param {string} hex - 形如 '#RRGGBB' 的颜色字符串
-     */
     function updateColorUI(hex) {
         if (!hex) return;
-        // Normalize hex to form #RRGGBB
         if (!hex.startsWith('#')) hex = '#' + hex;
         hex = hex.toUpperCase();
 
@@ -684,7 +1058,6 @@
         inputs.colorPreview.style.backgroundColor = hex;
         inputs.colorHexInput.value = hex.replace('#', '').toUpperCase();
 
-        // Update presets' active state
         inputs.presets.forEach(p => {
             if (p.dataset.color.toUpperCase() === hex) {
                 p.classList.add('active');
@@ -696,192 +1069,106 @@
             }
         });
 
-        // Persist and re-render immediately
         saveSettings();
         requestRender();
     }
 
-    // --- 自定义调色盘逻辑 ---
-    /**
-     * 初始化并绑定自定义调色盘的交互逻辑。
-     * 提供 HSV/HEX 转换、视觉更新和触摸/鼠标事件处理。
-     */
+    // --- Color Picker Helpers (Global) ---
+    function hsvToHex(h, s, v) {
+        s /= 100; v /= 100;
+        let c = v * s;
+        let x = c * (1 - Math.abs((h / 60) % 2 - 1));
+        let m = v - c;
+        let r=0, g=0, b=0;
+        if(0<=h && h<60){r=c;g=x;b=0;}
+        else if(60<=h && h<120){r=x;g=c;b=0;}
+        else if(120<=h && h<180){r=0;g=c;b=x;}
+        else if(180<=h && h<240){r=0;g=x;b=c;}
+        else if(240<=h && h<300){r=x;g=0;b=c;}
+        else{r=c;g=0;b=x;}
+        r = Math.round((r + m) * 255).toString(16).padStart(2,'0');
+        g = Math.round((g + m) * 255).toString(16).padStart(2,'0');
+        b = Math.round((b + m) * 255).toString(16).padStart(2,'0');
+        return `#${r}${g}${b}`;
+    }
+
+    function hexToHsv(hex) {
+        hex = (hex || '').replace('#', '').trim();
+        if (hex.length === 3) hex = hex.split('').map(ch => ch + ch).join('');
+        if (hex.length !== 6) return { hue: 0, sat: 0, val: 100 };
+        let r = parseInt(hex.substring(0,2), 16) / 255 || 0;
+        let g = parseInt(hex.substring(2,4), 16) / 255 || 0;
+        let b = parseInt(hex.substring(4,6), 16) / 255 || 0;
+        let max = Math.max(r,g,b), min = Math.min(r,g,b);
+        let h, s, v = max;
+        let d = max - min;
+        s = max === 0 ? 0 : d / max;
+        if(max === min) h = 0;
+        else {
+            switch(max){
+                case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+                case g: h = (b - r) / d + 2; break;
+                case b: h = (r - g) / d + 4; break;
+            }
+            h /= 6;
+        }
+        return { hue: Number.isFinite(h) ? h*360 : 0, sat: Number.isFinite(s) ? s*100 : 0, val: Number.isFinite(v) ? v*100 : 100 };
+    }
+
+    function rgbStringToHex(rgbStr) {
+        if (!rgbStr || typeof rgbStr !== 'string') return null;
+        const m = rgbStr.match(/rgba?\s*\(([^)]+)\)/i);
+        if (!m) return null;
+        const parts = m[1].split(',').map(p => p.trim());
+        if (parts.length < 3) return null;
+        const r = parseInt(parts[0], 10) || 0;
+        const g = parseInt(parts[1], 10) || 0;
+        const b = parseInt(parts[2], 10) || 0;
+        return '#' + [r,g,b].map(v => v.toString(16).padStart(2,'0')).join('').toUpperCase();
+    }
+
+    function updatePickerVisuals() {
+        cpState.hue = Number.isFinite(Number(cpState.hue)) ? Math.max(0, Math.min(360, Number(cpState.hue))) : 0;
+        cpState.sat = Number.isFinite(Number(cpState.sat)) ? Math.max(0, Math.min(100, Number(cpState.sat))) : 100;
+        cpState.val = Number.isFinite(Number(cpState.val)) ? Math.max(0, Math.min(100, Number(cpState.val))) : 100;
+
+        inputs.pickerSvBox.style.background = `linear-gradient(to bottom, transparent, #000), linear-gradient(to right, #fff, hsl(${cpState.hue}, 100%, 50%))`;
+        
+        inputs.pickerHueThumb.style.left = `${(cpState.hue / 360) * 100}%`;
+        inputs.pickerSvThumb.style.left = `${cpState.sat}%`;
+        inputs.pickerSvThumb.style.top = `${100 - cpState.val}%`;
+        inputs.pickerSvThumb.style.borderColor = cpState.val < 50 ? 'white' : 'black';
+    }
+
+    // --- Custom Color Picker ---
     function setupCustomColorPicker() {
         let draggingSv = false;
         let draggingHue = false;
 
-        /**
-         * 将 HSV 值转换为 HEX 字符串。
-         * @param {number} h 色相（0-360）
-         * @param {number} s 饱和度（0-100）
-         * @param {number} v 明度（0-100）
-         * @returns {string} 返回形如 '#RRGGBB' 的字符串
-         */
-        function hsvToHex(h, s, v) {
-            s /= 100; v /= 100;
-            let c = v * s;
-            let x = c * (1 - Math.abs((h / 60) % 2 - 1));
-            let m = v - c;
-            let r=0, g=0, b=0;
-            if(0<=h && h<60){r=c;g=x;b=0;}
-            else if(60<=h && h<120){r=x;g=c;b=0;}
-            else if(120<=h && h<180){r=0;g=c;b=x;}
-            else if(180<=h && h<240){r=0;g=x;b=c;}
-            else if(240<=h && h<300){r=x;g=0;b=c;}
-            else{r=c;g=0;b=x;}
-            r = Math.round((r + m) * 255).toString(16).padStart(2,'0');
-            g = Math.round((g + m) * 255).toString(16).padStart(2,'0');
-            b = Math.round((b + m) * 255).toString(16).padStart(2,'0');
-            return `#${r}${g}${b}`;
-        }
-
-        /**
-         * 将 HEX 字符串转换为 HSV 对象（字段：hue, sat, val）。
-         * 支持短写 '#f00'，对无效输入返回白色默认值。
-         * @param {string} hex - '#RRGGBB' 或 'RRGGBB' 或短写形式
-         * @returns {{hue:number, sat:number, val:number}}
-         */
-        function hexToHsv(hex) {
-            hex = (hex || '').replace('#', '').trim();
-            // support 3-digit hex like 'f00'
-            if (hex.length === 3) {
-                hex = hex.split('').map(ch => ch + ch).join('');
-            }
-            if (hex.length !== 6) {
-                // invalid input: return a safe default (white)
-                return { hue: 0, sat: 0, val: 100 };
-            }
-            let r = parseInt(hex.substring(0,2), 16) / 255 || 0;
-            let g = parseInt(hex.substring(2,4), 16) / 255 || 0;
-            let b = parseInt(hex.substring(4,6), 16) / 255 || 0;
-            let max = Math.max(r,g,b), min = Math.min(r,g,b);
-            let h, s, v = max;
-            let d = max - min;
-            s = max === 0 ? 0 : d / max;
-            if(max === min) h = 0;
-            else {
-                switch(max){
-                    case r: h = (g - b) / d + (g < b ? 6 : 0); break;
-                    case g: h = (b - r) / d + 2; break;
-                    case b: h = (r - g) / d + 4; break;
-                }
-                h /= 6;
-            }
-            return { hue: Number.isFinite(h) ? h*360 : 0, sat: Number.isFinite(s) ? s*100 : 0, val: Number.isFinite(v) ? v*100 : 100 };
-        }
-
-        // Parse rgb(...) or rgba(...) string to #RRGGBB
-        /**
-         * 将 CSS 的 rgb(...) 或 rgba(...) 字符串解析为 '#RRGGBB'。
-         * 若无法解析返回 null。
-         * @param {string} rgbStr
-         * @returns {string|null}
-         */
-        function rgbStringToHex(rgbStr) {
-            if (!rgbStr || typeof rgbStr !== 'string') return null;
-            const m = rgbStr.match(/rgba?\s*\(([^)]+)\)/i);
-            if (!m) return null;
-            const parts = m[1].split(',').map(p => p.trim());
-            if (parts.length < 3) return null;
-            const r = parseInt(parts[0], 10) || 0;
-            const g = parseInt(parts[1], 10) || 0;
-            const b = parseInt(parts[2], 10) || 0;
-            return '#' + [r,g,b].map(v => v.toString(16).padStart(2,'0')).join('').toUpperCase();
-        }
-
-        /**
-         * 更新调色盘视觉元素（SV 盒背景、thumb 位置与样式）。
-         */
-        function updatePickerVisuals() {
-            // Update SV Box Background based on Hue
-            // clamp cpState
-            // Use explicit finite-number checks so that 0 is preserved (0 is falsy)
-            cpState.hue = Number.isFinite(Number(cpState.hue)) ? Math.max(0, Math.min(360, Number(cpState.hue))) : 0;
-            cpState.sat = Number.isFinite(Number(cpState.sat)) ? Math.max(0, Math.min(100, Number(cpState.sat))) : 100;
-            cpState.val = Number.isFinite(Number(cpState.val)) ? Math.max(0, Math.min(100, Number(cpState.val))) : 100;
-
-            inputs.pickerSvBox.style.background = `linear-gradient(to bottom, transparent, #000), linear-gradient(to right, #fff, hsl(${cpState.hue}, 100%, 50%))`;
-            // Fallback: set colored outline so user sees hue even if gradient fails
-            try { inputs.pickerSvBox.style.outline = `2px solid ${hsvToHex(cpState.hue,100,50)}`; } catch (e) {}
-            
-            // Move Thumbs
-            inputs.pickerHueThumb.style.left = `${(cpState.hue / 360) * 100}%`;
-            inputs.pickerSvThumb.style.left = `${cpState.sat}%`;
-            inputs.pickerSvThumb.style.top = `${100 - cpState.val}%`;
-            
-            // Check brightness for thumb border
-            inputs.pickerSvThumb.style.borderColor = cpState.val < 50 ? 'white' : 'black';
-        }
-
-        // Read current picker UI state (thumb positions) back into cpState
-        /**
-         * 根据 UI 中 thumb 的样式位置读取当前的选择状态，写回 `cpState`。
-         * 用于在确认时保证状态与视觉一致（补偿丢失事件）。
-         */
-        function readPickerStateFromUI() {
-            try {
-                const hueLeft = inputs.pickerHueThumb.style.left || getComputedStyle(inputs.pickerHueThumb).left || '0%';
-                const svLeft = inputs.pickerSvThumb.style.left || getComputedStyle(inputs.pickerSvThumb).left || '0%';
-                const svTop = inputs.pickerSvThumb.style.top || getComputedStyle(inputs.pickerSvThumb).top || '0%';
-
-                // helper to parse percent or px
-                const parsePercent = (val, parentSize) => {
-                    if (!val) return 0;
-                    if (val.endsWith('%')) return parseFloat(val);
-                    // px value -> convert to percent relative to parent
-                    return (parseFloat(val) / parentSize) * 100;
-                };
-
-                const hueParentW = inputs.pickerHueSlider.getBoundingClientRect().width;
-                const svParent = inputs.pickerSvBox.getBoundingClientRect();
-
-                const huePct = parsePercent(hueLeft, hueParentW);
-                const satPct = parsePercent(svLeft, svParent.width);
-                const valPct = 100 - parsePercent(svTop, svParent.height);
-
-                cpState.hue = Math.max(0, Math.min(360, (huePct / 100) * 360));
-                cpState.sat = Math.max(0, Math.min(100, satPct));
-                cpState.val = Math.max(0, Math.min(100, valPct));
-            } catch (err) {
-                // fallback: keep existing cpState
-            }
-        }
-
-        /**
-         * 处理 SV 区域的指针/触摸输入，计算并更新 cpState 的 sat/val。
-         * @param {Event} e
-         */
         function handleSvInput(e) {
             const rect = inputs.pickerSvBox.getBoundingClientRect();
             let x = (e.clientX || e.touches[0].clientX) - rect.left;
             let y = (e.clientY || e.touches[0].clientY) - rect.top;
             x = Math.max(0, Math.min(x, rect.width));
             y = Math.max(0, Math.min(y, rect.height));
-            
             cpState.sat = (x / rect.width) * 100;
             cpState.val = 100 - ((y / rect.height) * 100);
             updatePickerVisuals();
         }
 
-        /**
-         * 处理色相滑块的指针/触摸输入，计算并更新 cpState.hue。
-         * @param {Event} e
-         */
         function handleHueInput(e) {
             const rect = inputs.pickerHueSlider.getBoundingClientRect();
             let x = (e.clientX || e.touches[0].clientX) - rect.left;
             x = Math.max(0, Math.min(x, rect.width));
-            
             cpState.hue = (x / rect.width) * 360;
             updatePickerVisuals();
         }
 
         inputs.btnOpenPicker.addEventListener('click', () => {
-            // Compute picker state from current solid color, with fallback
+            window.pickingTarget = 'background';
             try {
                 let base = appState.solidColor;
                 if (!base) base = inputs.colorPreview.style.backgroundColor || '';
-                // if rgb(...) convert to hex
                 if (base && base.startsWith('rgb')) {
                     const hex = rgbStringToHex(base);
                     if (hex) base = hex;
@@ -890,33 +1177,43 @@
             } catch (err) {
                 cpState = { hue: 0, sat: 100, val: 100 };
             }
-            // Ensure numeric valid values
-            cpState.hue = (typeof cpState.hue === 'number' && isFinite(cpState.hue)) ? cpState.hue : 0;
-            cpState.sat = (typeof cpState.sat === 'number' && isFinite(cpState.sat)) ? cpState.sat : 100;
-            cpState.val = (typeof cpState.val === 'number' && isFinite(cpState.val)) ? cpState.val : 100;
             updatePickerVisuals();
             inputs.pickerModal.classList.remove('hidden');
+            // Trigger reflow
+            void inputs.pickerModal.offsetWidth;
+            inputs.pickerModal.classList.add('active');
         });
 
         inputs.pickerConfirm.addEventListener('click', () => {
-            // Ensure cpState reflects current UI positions (cover lost events)
-            readPickerStateFromUI();
             const hex = hsvToHex(cpState.hue, cpState.sat, cpState.val);
-            updateColorUI(hex);
+            
+            if (window.pickingTarget === 'shadow') {
+                appState.shadow.color = hex;
+                updateShadowColorUI(hex);
+            } else {
+                updateColorUI(hex);
+            }
+            
             requestRender();
             saveSettings();
-            inputs.pickerModal.classList.add('hidden');
+            inputs.pickerModal.classList.remove('active');
+            setTimeout(() => {
+                inputs.pickerModal.classList.add('hidden');
+            }, 300);
+            window.pickingTarget = null;
         });
 
         inputs.pickerCancel.addEventListener('click', () => {
-            inputs.pickerModal.classList.add('hidden');
+            inputs.pickerModal.classList.remove('active');
+            setTimeout(() => {
+                inputs.pickerModal.classList.add('hidden');
+            }, 300);
+            window.pickingTarget = null;
         });
 
-        // Event Listeners for SV Box
         const startSv = (e) => { draggingSv = true; handleSvInput(e); };
         const moveSv = (e) => { if(draggingSv) { e.preventDefault(); handleSvInput(e); }};
         const endSv = () => { draggingSv = false; };
-        
         inputs.pickerSvBox.addEventListener('mousedown', startSv);
         inputs.pickerSvBox.addEventListener('touchstart', startSv);
         window.addEventListener('mousemove', moveSv);
@@ -924,11 +1221,9 @@
         window.addEventListener('mouseup', endSv);
         window.addEventListener('touchend', endSv);
 
-        // Event Listeners for Hue Slider
         const startHue = (e) => { draggingHue = true; handleHueInput(e); };
         const moveHue = (e) => { if(draggingHue) { e.preventDefault(); handleHueInput(e); }};
         const endHue = () => { draggingHue = false; };
-
         inputs.pickerHueSlider.addEventListener('mousedown', startHue);
         inputs.pickerHueSlider.addEventListener('touchstart', startHue);
         window.addEventListener('mousemove', moveHue);
@@ -937,7 +1232,178 @@
         window.addEventListener('touchend', endHue);
     }
 
+    // --- Layout & Mode Switch ---
+
+    function switchLayoutMode(mode) {
+        appState.layoutMode = mode;
+        recalculateDimensions();
+        saveSettings();
+        updateLayoutModeUI();
+        
+        // Force regenerate background base when switching modes
+        // because Free Mode uses a different base generation logic (radiate)
+        // than Strip Mode (stack).
+        if (appState.mode === 'self' || appState.mode === 'custom') {
+             generateStitchedBase();
+        }
+        
+        // Reset free positions to a clean state when switching to free? 
+        // No, keep them if possible, but if switching for first time, arrange nicely.
+        // For simplicity, we just request render which handles the mode check.
+        // If switching TO Free Mode, ensure we have initial positions
+        if (mode === 'free' && originalImageObjects.length > 0) {
+            initializeFreePositionsIfNeeded();
+        }
+        
+        // Re-render image list to update drag handlers and order
+        renderImageList();
+
+        requestRender();
+    }
+
+    function updateLayoutModeUI() {
+        const stripBtn = document.getElementById('mode-strip');
+        const freeBtn = document.getElementById('mode-free');
+        const hintText = document.getElementById('list-hint-text');
+        const borderWidthCtrl = document.getElementById('ctrl-border-width');
+        
+        if (appState.layoutMode === 'strip') {
+            stripBtn.classList.add('active'); stripBtn.classList.remove('inactive');
+            freeBtn.classList.add('inactive'); freeBtn.classList.remove('active');
+            inputs.optFreeMode.classList.add('hidden');
+            inputs.ctrlOuterBorder.classList.remove('hidden');
+            if (borderWidthCtrl) borderWidthCtrl.classList.remove('hidden');
+            if(hintText) hintText.innerText = '长按拖拽调整拼接顺序';
+        } else {
+            freeBtn.classList.add('active'); freeBtn.classList.remove('inactive');
+            stripBtn.classList.add('inactive'); stripBtn.classList.remove('active');
+            inputs.optFreeMode.classList.remove('hidden');
+            inputs.ctrlOuterBorder.classList.add('hidden');
+            if (borderWidthCtrl) borderWidthCtrl.classList.add('hidden');
+            if(hintText) hintText.innerText = '长按拖拽调整图层顺序，双击图片居中';
+        }
+        
+        updateBlendModeVisibility();
+
+        // Update aspect ratio buttons active state
+        document.querySelectorAll('.ratio-btn').forEach(btn => {
+            const ratio = parseFloat(btn.innerText.split(':')[0]) / parseFloat(btn.innerText.split(':')[1]);
+            // Approximate matching
+            if (Math.abs(ratio - appState.canvasRatio) < 0.01) {
+                btn.classList.add('active');
+            } else {
+                btn.classList.remove('active');
+            }
+        });
+
+        // Update Scale Slider for current mode
+        const currentScale = appState.layoutMode === 'free' ? appState.scaleFree : appState.scaleStrip;
+        inputs.scaleSlider.value = currentScale;
+        inputs.scaleNum.value = currentScale;
+    }
+
+    function setAspectRatio(ratio, btnElement) {
+        appState.canvasRatio = ratio;
+        saveSettings();
+        
+        document.querySelectorAll('.ratio-btn').forEach(b => b.classList.remove('active'));
+        if(btnElement) btnElement.classList.add('active');
+        
+        // Hide custom inputs
+        document.getElementById('custom-ratio-inputs').classList.add('hidden');
+        
+        requestRender();
+    }
+
+    function toggleCustomRatio(btn) {
+        const inputsDiv = document.getElementById('custom-ratio-inputs');
+        const isHidden = inputsDiv.classList.contains('hidden');
+        
+        if (isHidden) {
+            inputsDiv.classList.remove('hidden');
+            btn.classList.add('active');
+            // Deactivate others
+            document.querySelectorAll('.ratio-btn').forEach(b => {
+                if(b !== btn) b.classList.remove('active');
+            });
+        } else {
+            inputsDiv.classList.add('hidden');
+            btn.classList.remove('active');
+        }
+    }
+
+    document.getElementById('btn-apply-ratio').addEventListener('click', () => {
+        const w = parseFloat(document.getElementById('ratio-w').value) || 9;
+        const h = parseFloat(document.getElementById('ratio-h').value) || 16;
+        if (w > 0 && h > 0) {
+            appState.canvasRatio = w / h;
+            saveSettings();
+            requestRender();
+        }
+    });
+
+    function initializeFreePositionsIfNeeded() {
+        // Simple vertical layout for init, fitting in 1080 width
+        const refWidth = 1080;
+        let currentY = 50;
+        
+        // Check if we need to init (e.g. if x,y are all 0)
+        // Or just re-layout if user asks? For now, automatic only if missing data.
+        
+        // We will do a safe check: if all Y are 0, we likely need to layout.
+        const allZero = originalImageObjects.every(img => (img.free?.y || 0) === 0);
+        
+        if (allZero) {
+            originalImageObjects.forEach(item => {
+                if (!item.free) item.free = {};
+                // Default scale to fit width with some padding
+                const desiredW = refWidth * 0.6; // 60% width
+                const scale = desiredW / item.width;
+                
+                item.free.w = item.width * scale;
+                item.free.h = item.height * scale;
+                item.free.x = (refWidth - item.free.w) / 2;
+                item.free.y = currentY;
+                
+                currentY += item.free.h + 20;
+            });
+        }
+    }
+
     // --- Event Listeners ---
+
+    function bindSync(slider, num, callback) {
+        const handleStart = (e) => {
+            const rect = slider.getBoundingClientRect();
+            const clientX = (e.touches ? e.touches[0].clientX : e.clientX);
+            const min = parseFloat(slider.min);
+            const max = parseFloat(slider.max);
+            const val = parseFloat(slider.value);
+            const ratio = (val - min) / (max - min);
+            const thumbX = rect.left + (ratio * rect.width);
+            const tolerance = 25; 
+            if (Math.abs(clientX - thumbX) > tolerance) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+        };
+        slider.addEventListener('mousedown', handleStart, { capture: true });
+        slider.addEventListener('touchstart', handleStart, { capture: true, passive: false });
+        slider.addEventListener('input', (e) => {
+            num.value = slider.value;
+            callback(slider.value);
+            saveSettings();
+        });
+        num.addEventListener('input', () => {
+            let val = parseFloat(num.value);
+            if (val > parseFloat(slider.max)) val = parseFloat(slider.max);
+            if (val < parseFloat(slider.min)) val = parseFloat(slider.min);
+            if (isNaN(val)) return;
+            slider.value = val;
+            callback(val);
+            saveSettings();
+        });
+    }
 
     function setupEventListeners() {
         document.getElementById('btn-select-images').addEventListener('click', () => {
@@ -996,7 +1462,18 @@
             requestRender();
         });
         bindSync(inputs.scaleSlider, inputs.scaleNum, (val) => {
-            appState.scale = parseInt(val);
+            const v = parseInt(val);
+            if (appState.layoutMode === 'free') {
+                appState.scaleFree = v;
+            } else {
+                appState.scaleStrip = v;
+            }
+            // Update legacy scale for compatibility
+            appState.scale = v;
+            
+            if (appState.layoutMode === 'free' && appState.mode !== 'custom') {
+                generateStitchedBase();
+            }
             requestRender();
         });
         bindSync(inputs.posX, inputs.posXNum, (val) => {
@@ -1008,18 +1485,17 @@
             requestRender();
         });
 
-        inputs.qualitySlider.addEventListener('input', (e) => {
-            const val = parseInt(e.target.value);
-            appState.exportQuality = val;
-            inputs.qualityDisplay.textContent = val + '%';
+        // Use bindSync for quality and resScale
+        const qualityNum = document.getElementById('val-quality');
+        bindSync(inputs.qualitySlider, qualityNum, (val) => {
+            appState.exportQuality = parseInt(val);
             saveSettings();
         });
 
-        inputs.resScaleSlider.addEventListener('input', (e) => {
-            const val = parseInt(e.target.value);
-            appState.exportScale = val;
-            inputs.resScaleDisplay.textContent = val + '%';
-            updateResolutionDisplay(); 
+        const resScaleNum = document.getElementById('val-res-scale');
+        bindSync(inputs.resScaleSlider, resScaleNum, (val) => {
+            appState.exportScale = parseInt(val);
+            updateResolutionDisplay();
             saveSettings();
         });
 
@@ -1031,131 +1507,366 @@
             });
         });
 
+        // Blend Mode Listener (Custom Dropdown Logic)
+        const blendModeSelect = document.getElementById('select-bg-blend-mode');
+        const blendDropdownBtn = document.getElementById('btn-blend-dropdown');
+        const blendDropdownMenu = document.getElementById('blend-dropdown-menu');
+        const blendDropdownLabel = document.getElementById('blend-dropdown-label');
+        const blendDropdownArrow = document.getElementById('blend-dropdown-arrow');
+        const blendOptions = document.querySelectorAll('.blend-option');
+
+        function updateBlendDropdownUI(value) {
+            // Update hidden select
+            if (blendModeSelect) blendModeSelect.value = value;
+            
+            // Update label
+            const selectedOption = Array.from(blendOptions).find(opt => opt.dataset.value === value);
+            if (selectedOption && blendDropdownLabel) {
+                blendDropdownLabel.textContent = selectedOption.textContent;
+            }
+            
+            // Highlight selected option
+            blendOptions.forEach(opt => {
+                if (opt.dataset.value === value) {
+                    opt.classList.add('bg-[#29499d]', 'text-white');
+                    opt.classList.remove('text-gray-200', 'hover:bg-[#3a3a45]');
+                } else {
+                    opt.classList.remove('bg-[#29499d]', 'text-white');
+                    opt.classList.add('text-gray-200', 'hover:bg-[#3a3a45]');
+                }
+            });
+        }
+
+        if (blendDropdownBtn && blendDropdownMenu) {
+            // Toggle Menu
+            blendDropdownBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const isHidden = blendDropdownMenu.classList.contains('hidden');
+                if (isHidden) {
+                    blendDropdownMenu.classList.remove('hidden');
+                    blendDropdownArrow.style.transform = 'rotate(180deg)';
+                } else {
+                    blendDropdownMenu.classList.add('hidden');
+                    blendDropdownArrow.style.transform = 'rotate(0deg)';
+                }
+            });
+
+            // Option Click
+            blendOptions.forEach(opt => {
+                opt.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const val = opt.dataset.value;
+                    appState.bgBlendMode = val;
+                    updateBlendDropdownUI(val);
+                    saveSettings();
+                    requestRender();
+                    
+                    // Close menu
+                    blendDropdownMenu.classList.add('hidden');
+                    blendDropdownArrow.style.transform = 'rotate(0deg)';
+                });
+            });
+
+            // Click Outside to Close
+            document.addEventListener('click', (e) => {
+                if (!blendDropdownBtn.contains(e.target) && !blendDropdownMenu.contains(e.target)) {
+                    blendDropdownMenu.classList.add('hidden');
+                    if(blendDropdownArrow) blendDropdownArrow.style.transform = 'rotate(0deg)';
+                }
+            });
+
+            // Initialize UI
+            updateBlendDropdownUI(appState.bgBlendMode || 'screen');
+        } else if (blendModeSelect) {
+            // Fallback for old select if custom UI fails
+            blendModeSelect.addEventListener('change', (e) => {
+                appState.bgBlendMode = e.target.value;
+                saveSettings();
+                requestRender();
+            });
+        }
+
         inputs.btnSave.addEventListener('click', handleSave);
 
         inputs.btnHome.addEventListener('click', () => {
             window.location.reload(); 
         });
 
-        // Helper: keep a slider and numeric input in sync and persist changes
-        /**
-         * 将滑块与数字输入进行双向绑定，并在值变更时调用回调同时保存设置。
-         * @param {HTMLElement} slider - 滑块元素
-         * @param {HTMLElement} num - 数字输入元素
-         * @param {function} callback - 值改变后的回调
-         */
-        function bindSync(slider, num, callback) {
-            slider.addEventListener('input', () => {
-                num.value = slider.value;
-                callback(slider.value);
-                saveSettings();
-            });
-            num.addEventListener('input', () => {
-                let val = parseFloat(num.value);
-                if (val > parseFloat(slider.max)) val = parseFloat(slider.max);
-                if (val < parseFloat(slider.min)) val = parseFloat(slider.min);
-                if (isNaN(val)) return;
-                slider.value = val;
-                callback(val);
-                saveSettings();
-            });
-        }
+        inputs.btnCloseDrawer.addEventListener('click', closeImageEditor);
+        
+        bindSync(inputs.dSatSlider, inputs.dSatNum, (val) => {
+            if (currentlyEditingIndex >= 0 && originalImageObjects[currentlyEditingIndex]) {
+                originalImageObjects[currentlyEditingIndex].edit.sat = parseInt(val);
+                requestRender();
+                // For Free Mode background, we might need update, but debounce it
+                if(appState.mode === 'self' || appState.mode === 'custom') generateStitchedBase();
+            }
+        });
+        bindSync(inputs.dBriSlider, inputs.dBriNum, (val) => {
+            if (currentlyEditingIndex >= 0 && originalImageObjects[currentlyEditingIndex]) {
+                originalImageObjects[currentlyEditingIndex].edit.bri = parseInt(val);
+                requestRender();
+                if(appState.mode === 'self' || appState.mode === 'custom') generateStitchedBase();
+            }
+        });
+        bindSync(inputs.dConSlider, inputs.dConNum, (val) => {
+            if (currentlyEditingIndex >= 0 && originalImageObjects[currentlyEditingIndex]) {
+                originalImageObjects[currentlyEditingIndex].edit.con = parseInt(val);
+                requestRender();
+                if(appState.mode === 'self' || appState.mode === 'custom') generateStitchedBase();
+            }
+        });
 
-        // Hide insert indicator when leaving the list area
+        // Drag/Drop Listeners for Image List
         inputs.imageListContainer.addEventListener('dragleave', (e) => {
-            // Only hide when truly leaving the container
             const related = e.relatedTarget;
             if (!related || !inputs.imageListContainer.contains(related)) hideInsertIndicator();
         });
+        inputs.imageListContainer.addEventListener('dragover', handleDragOver);
+        inputs.imageListContainer.addEventListener('drop', handleDrop);
+    }
 
-        inputs.imageListContainer.addEventListener('dragenter', (e) => {
-            // ensure indicator exists
-            // no-op, placeholder to ensure drag events fire on container
-        });
+    // --- Image Edit Logic ---
 
-        // Container-level dragover/drop to allow dropping in gaps (including below the last item)
-        inputs.imageListContainer.addEventListener('dragover', (e) => {
-            if (e.preventDefault) e.preventDefault();
-            const container = inputs.imageListContainer;
-            const cursorYContent = (e.clientY - container.getBoundingClientRect().top) + container.scrollTop;
-            const insertIndex = computeInsertIndexFromY(container, cursorYContent);
-            const items = Array.from(container.querySelectorAll('.draggable-item'));
-            let insertTop = 0;
-            if (insertIndex === 0) {
-                insertTop = items[0] ? items[0].offsetTop : 0;
-            } else if (insertIndex >= items.length) {
-                const last = items[items.length - 1];
-                insertTop = last ? (last.offsetTop + last.offsetHeight) : 0;
+    // --- Shadow Edit Logic ---
+    const shadowInputs = {
+        drawer: document.getElementById('image-shadow-drawer'),
+        index: document.getElementById('drawer-shadow-index'),
+        btnClose: document.getElementById('btn-close-shadow'),
+        blurSlider: document.getElementById('drawer-slider-s-blur'),
+        blurNum: document.getElementById('drawer-val-s-blur'),
+        distSlider: document.getElementById('drawer-slider-s-dist'),
+        distNum: document.getElementById('drawer-val-s-dist'),
+        angleSlider: document.getElementById('drawer-slider-s-angle'),
+        angleNum: document.getElementById('drawer-val-s-angle'),
+        sizeSlider: document.getElementById('drawer-slider-s-size'),
+        sizeNum: document.getElementById('drawer-val-s-size'),
+        opSlider: document.getElementById('drawer-slider-s-opacity'),
+        opNum: document.getElementById('drawer-val-s-opacity'),
+        // colorContainer removed, using dynamic presets
+        btnPicker: document.getElementById('btn-shadow-picker')
+    };
+
+    function openShadowEditor() {
+        // Close other drawer if open
+        inputs.drawer.classList.remove('active');
+
+        shadowInputs.index.innerText = `(全局)`;
+        
+        shadowInputs.blurSlider.value = appState.shadow.blur;
+        shadowInputs.blurNum.value = appState.shadow.blur;
+        shadowInputs.distSlider.value = appState.shadow.distance || 0;
+        shadowInputs.distNum.value = appState.shadow.distance || 0;
+        shadowInputs.angleSlider.value = appState.shadow.angle || 0;
+        shadowInputs.angleNum.value = appState.shadow.angle || 0;
+        shadowInputs.sizeSlider.value = appState.shadow.size || 0;
+        shadowInputs.sizeNum.value = appState.shadow.size || 0;
+        shadowInputs.opSlider.value = appState.shadow.opacity;
+        shadowInputs.opNum.value = appState.shadow.opacity;
+        
+        updateShadowColorUI(appState.shadow.color);
+
+        shadowInputs.drawer.classList.add('active');
+    }
+
+    function closeShadowEditor() {
+        shadowInputs.drawer.classList.remove('active');
+    }
+
+    function updateShadowColorUI(color) {
+        const container = document.getElementById('shadow-color-presets');
+        if (!container) return;
+        const btns = container.querySelectorAll('.shadow-color-btn');
+        let matched = false;
+        btns.forEach(btn => {
+            if (btn.dataset.color === color) {
+                btn.classList.add('border-white');
+                btn.classList.remove('border-transparent');
+                matched = true;
             } else {
-                const prev = items[insertIndex - 1];
-                insertTop = prev.offsetTop + prev.offsetHeight;
+                btn.classList.remove('border-white');
+                btn.classList.add('border-transparent');
             }
-            showInsertIndicatorAt(insertTop);
-            return false;
+        });
+        
+        const hexInput = document.getElementById('shadow-color-hex');
+        if (hexInput) hexInput.value = color.replace('#', '');
+        
+        const preview = document.getElementById('shadow-color-preview');
+        if (preview) preview.style.backgroundColor = color;
+    }
+
+    function setupShadowListeners() {
+        // Bind Shadow Events
+        shadowInputs.btnClose.addEventListener('click', closeShadowEditor);
+        
+        // Global Shadow Toggle
+        document.getElementById('toggle-shadow').addEventListener('change', (e) => {
+            appState.shadow.enabled = e.target.checked;
+            const btn = document.getElementById('btn-shadow-settings');
+            if (e.target.checked) btn.classList.remove('hidden');
+            else btn.classList.add('hidden');
+            requestRender();
+            saveSettings();
+        });
+        
+        document.getElementById('btn-shadow-settings').addEventListener('click', () => {
+            openShadowEditor();
         });
 
-        inputs.imageListContainer.addEventListener('drop', (e) => {
-            e.preventDefault();
-            hideInsertIndicator();
-            cleanupPlaceholders();
-            if (!dragSrcEl) return false;
-            const oldIdx = parseInt(dragSrcEl.dataset.index);
-            const container = inputs.imageListContainer;
-            const cursorYContent = (e.clientY - container.getBoundingClientRect().top) + container.scrollTop;
-            let insertIndex = computeInsertIndexFromY(container, cursorYContent);
-            if (insertIndex > oldIdx) insertIndex--;
-            if (insertIndex !== oldIdx) moveImage(oldIdx, insertIndex);
-            return false;
+        bindSync(shadowInputs.blurSlider, shadowInputs.blurNum, (val) => {
+            appState.shadow.blur = parseInt(val);
+            requestRender();
+            saveSettings();
+        });
+        bindSync(shadowInputs.distSlider, shadowInputs.distNum, (val) => {
+            appState.shadow.distance = parseInt(val);
+            requestRender();
+            saveSettings();
+        });
+        bindSync(shadowInputs.angleSlider, shadowInputs.angleNum, (val) => {
+            appState.shadow.angle = parseInt(val);
+            requestRender();
+            saveSettings();
+        });
+        bindSync(shadowInputs.sizeSlider, shadowInputs.sizeNum, (val) => {
+            appState.shadow.size = parseInt(val);
+            requestRender();
+            saveSettings();
+        });
+        bindSync(shadowInputs.opSlider, shadowInputs.opNum, (val) => {
+            appState.shadow.opacity = parseFloat(val);
+            requestRender();
+            saveSettings();
+        });
+
+        // Init Shadow Color Presets
+        const shadowPresetsContainer = document.getElementById('shadow-color-presets');
+        const shadowColors = ['#000000', '#808080', '#FFFFFF', '#29499d', '#5B7C99', '#8C7B75'];
+        
+        shadowColors.forEach(color => {
+            const btn = document.createElement('div');
+            btn.className = 'w-8 h-8 rounded-full border-2 cursor-pointer shadow-color-btn transition-transform hover:scale-110';
+            btn.style.backgroundColor = color;
+            btn.dataset.color = color;
+            if (color === (appState.shadow.color || '#000000')) {
+                btn.classList.add('border-white');
+            } else {
+                btn.classList.add('border-transparent');
+            }
+            
+            btn.addEventListener('click', () => {
+                appState.shadow.color = color;
+                updateShadowColorUI(color);
+                requestRender();
+                saveSettings();
+            });
+            shadowPresetsContainer.appendChild(btn);
+        });
+
+        shadowInputs.btnPicker.addEventListener('click', () => {
+            window.pickingTarget = 'shadow';
+            try {
+                let base = appState.shadow.color || '#000000';
+                if (base.startsWith('rgb')) {
+                    const hex = rgbStringToHex(base);
+                    if (hex) base = hex;
+                }
+                cpState = hexToHsv(base);
+            } catch (err) {
+                cpState = { hue: 0, sat: 0, val: 0 };
+            }
+            updatePickerVisuals();
+            inputs.pickerModal.classList.remove('hidden');
+            // Trigger reflow
+            void inputs.pickerModal.offsetWidth;
+            inputs.pickerModal.classList.add('active');
         });
     }
 
-    // Update UI for selected background mode (solid/custom)
-    /**
-     * 根据当前背景模式更新界面显示（纯色 vs 自定义背景）。
-     * @param {string} mode - 'solid' | 'custom'
-     */
-    function updateModeUI(mode) {
-        inputs.modeBtns.forEach(btn => {
-            if (btn.dataset.mode === mode) {
-                btn.classList.remove('text-gray-400');
-                btn.classList.add('bg-[#29499d]', 'text-white');
-            } else {
-                btn.classList.remove('bg-[#29499d]', 'text-white');
-                btn.classList.add('text-gray-400');
-            }
-        });
+    // --- Image List Drag & Sort ---
 
-        if (mode === 'solid') {
-            inputs.secSolid.classList.remove('hidden');
-            inputs.secBgControls.classList.add('hidden');
-        } else {
-            inputs.secSolid.classList.add('hidden');
-            inputs.secBgControls.classList.remove('hidden');
-            
-            if (mode === 'custom') {
-                inputs.btnCustomBg.classList.remove('hidden');
+    function openImageEditor(index) {
+        if (index < 0 || index >= originalImageObjects.length) return;
+        currentlyEditingIndex = index;
+        
+        // Close shadow drawer
+        shadowInputs.drawer.classList.remove('active');
+
+        const imgObj = originalImageObjects[index];
+        if (!imgObj.edit) imgObj.edit = { sat: 100, bri: 0, con: 100 };
+        inputs.drawerIndex.innerText = `#${index + 1}`;
+        inputs.dSatSlider.value = imgObj.edit.sat;
+        inputs.dSatNum.value = imgObj.edit.sat;
+        inputs.dBriSlider.value = imgObj.edit.bri;
+        inputs.dBriNum.value = imgObj.edit.bri;
+        inputs.dConSlider.value = imgObj.edit.con;
+        inputs.dConNum.value = imgObj.edit.con;
+        inputs.drawer.classList.add('active');
+    }
+
+    function closeImageEditor() {
+        inputs.drawer.classList.remove('active');
+        currentlyEditingIndex = -1;
+    }
+
+    function updateBlendModeVisibility() {
+        const container = document.getElementById('bg-blend-mode-container');
+        if (container) {
+            if (appState.layoutMode === 'free' && appState.mode === 'self') {
+                container.classList.remove('hidden');
             } else {
-                inputs.btnCustomBg.classList.add('hidden');
+                container.classList.add('hidden');
             }
         }
-        saveSettings();
     }
 
-    // --- Logic: Drag & Drop Image List ---
+    function updateModeUI(mode) {
+        toggleLoading(true);
+        setTimeout(() => {
+            inputs.modeBtns.forEach(btn => {
+                if (btn.dataset.mode === mode) {
+                    btn.classList.remove('inactive');
+                    btn.classList.add('active');
+                } else {
+                    btn.classList.remove('active');
+                    btn.classList.add('inactive');
+                }
+            });
 
-    /**
-     * 渲染图片列表（可拖拽排序）。
-     * 负责创建每个条目的缩略图、信息与删除按钮，绑定拖放与触摸事件。
-     */
+            if (mode === 'solid') {
+                inputs.secSolid.classList.remove('hidden');
+                inputs.secBgControls.classList.add('hidden');
+            } else {
+                inputs.secSolid.classList.add('hidden');
+                inputs.secBgControls.classList.remove('hidden');
+                if (mode === 'custom') {
+                    inputs.btnCustomBg.classList.remove('hidden');
+                } else {
+                    inputs.btnCustomBg.classList.add('hidden');
+                }
+            }
+            updateBlendModeVisibility();
+            
+            // Update scale slider based on current layout mode
+            const currentScale = appState.layoutMode === 'free' ? appState.scaleFree : appState.scaleStrip;
+            inputs.scaleSlider.value = currentScale;
+            inputs.scaleNum.value = currentScale;
+            
+            saveSettings();
+            toggleLoading(false);
+        }, 10);
+    }
+
+    // --- Image List Drag & Sort ---
+    // (Existing Logic preserved for layer reordering)
+    let dragSrcEl = null;
+
     function renderImageList() {
         const container = inputs.imageListContainer;
-        // Clear list but preserve or recreate the insert indicator element
         container.innerHTML = '';
-
-        // Remove any leftover placeholder nodes that might show as a gray box
         cleanupPlaceholders();
 
-        // Ensure insert indicator exists and is attached
         let indicator = inputs.insertIndicator;
         if (!indicator || !document.body.contains(indicator)) {
             indicator = document.createElement('div');
@@ -1165,6 +1876,13 @@
         }
         container.appendChild(indicator);
 
+        if (appState.layoutMode === 'free') {
+             const tip = document.createElement('div');
+             tip.className = 'text-[10px] text-gray-500 text-center mb-2';
+             tip.innerText = '列表上方的图片位于顶层 (双击图片居中)';
+             container.appendChild(tip);
+        }
+
         if (originalImageObjects.length === 0) {
             const empty = document.createElement('div');
             empty.className = 'text-center text-xs text-gray-500 py-2';
@@ -1173,70 +1891,110 @@
             return;
         }
 
-        originalImageObjects.forEach((img, index) => {
+        let itemsToRender = originalImageObjects.map((img, i) => ({imgObj: img, index: i}));
+        if (appState.layoutMode === 'free') {
+            itemsToRender.reverse();
+        }
+
+        itemsToRender.forEach(({imgObj, index}) => {
+            const img = imgObj.img;
             const div = document.createElement('div');
             div.className = 'draggable-item flex items-center bg-[#292932] p-2 rounded-lg border border-[#444] relative z-10';
             div.dataset.index = index;
             
-            // Thumbnail
+            // Double click to center in Free Mode
+            div.addEventListener('dblclick', () => {
+                if (appState.layoutMode === 'free') {
+                    centerImage(index);
+                }
+            });
+            
+            // Highlight if active in free mode
+            if (appState.layoutMode === 'free' && index === activeImageIndex) {
+                div.classList.add('border-[#29499d]', 'border-2');
+                div.classList.remove('border-[#444]');
+            }
+
             const thumbCanvas = document.createElement('canvas');
             thumbCanvas.width = 40; thumbCanvas.height = 40;
             const tCtx = thumbCanvas.getContext('2d');
-            const size = Math.min(img.width, img.height);
-            tCtx.drawImage(img, (img.width-size)/2, (img.height-size)/2, size, size, 0, 0, 40, 40);
+            
+            if (imgObj.thumbnail) {
+                tCtx.drawImage(imgObj.thumbnail, 0, 0, 80, 80, 0, 0, 40, 40);
+            } else {
+                // Optimization: If image is huge, don't draw directly to 40x40 if possible,
+                // but here we just do it. The lag might be from too many of these.
+                // We rely on createThumbnail having done the heavy lifting if possible.
+                // If thumbnail is missing (shouldn't happen often), we draw original.
+                const size = Math.min(img.width, img.height);
+                tCtx.drawImage(img, (img.width-size)/2, (img.height-size)/2, size, size, 0, 0, 40, 40);
+            }
             thumbCanvas.className = 'rounded w-10 h-10 bg-black mr-3 flex-shrink-0 pointer-events-none';
             
-            // Info
             const infoDiv = document.createElement('div');
             infoDiv.className = 'flex-1 min-w-0 pointer-events-none';
             infoDiv.innerHTML = `<div class="text-xs text-gray-300 truncate">图 ${index + 1}</div><div class="text-[10px] text-gray-500">${img.width}x${img.height}</div>`;
 
-            // Delete Button (Separate from drag area)
+            const actionsDiv = document.createElement('div');
+            actionsDiv.className = 'flex space-x-1 ml-2 z-20';
+
+            // Shadow Button (Removed)
+            /*
+            const btnShadow = document.createElement('button');
+            ...
+            actionsDiv.appendChild(btnShadow);
+            */
+
+            const btnEdit = document.createElement('button');
+            btnEdit.className = 'p-2 rounded text-gray-400 hover:text-white hover:bg-gray-700 cursor-pointer';
+            btnEdit.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>`;
+            btnEdit.onclick = (e) => {
+                e.stopPropagation();
+                openImageEditor(index);
+            };
+
+            actionsDiv.appendChild(btnEdit);
+
             const btnDel = document.createElement('button');
-            btnDel.className = 'p-2 rounded text-red-400 hover:bg-red-900/30 ml-2 cursor-pointer z-20';
+            btnDel.className = 'p-2 rounded text-red-400 hover:bg-red-900/30 cursor-pointer';
             btnDel.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>`;
             btnDel.onclick = (e) => {
-                e.stopPropagation(); // Prevent drag start
+                e.stopPropagation(); 
+                if (currentlyEditingIndex === index) closeImageEditor();
                 removeImage(index);
             };
 
+            actionsDiv.appendChild(btnEdit);
+            actionsDiv.appendChild(btnDel);
+
             div.appendChild(thumbCanvas);
             div.appendChild(infoDiv);
-            div.appendChild(btnDel);
+            div.appendChild(actionsDiv);
+            div.onclick = () => {
+                // Clicking list item in Free Mode selects the image
+                if (appState.layoutMode === 'free') {
+                    activeImageIndex = index;
+                    renderImageList(); // Update border highlight
+                    requestRender();
+                }
+            };
             container.appendChild(div);
 
-            // Bind Drag Events
             addDragListeners(div);
         });
 
-        // After rendering, remove any unexpected nodes (defensive cleanup)
         Array.from(container.children).forEach(child => {
             if (child === inputs.insertIndicator) return;
             if (child.classList && child.classList.contains('draggable-item')) return;
-            // allow the empty message only when there are no items
-            if (child.classList && child.classList.contains('text-center')) {
-                if (originalImageObjects.length === 0) return;
-            }
-            // remove any other stray element (this removes the gray phantom)
+            if (child.classList && child.classList.contains('text-center') && originalImageObjects.length === 0) return;
             child.remove();
         });
     }
 
-    // --- Simple Drag and Drop Implementation ---
-    let dragSrcEl = null;
-    let dragPlaceholder = null;
-
-    /**
-     * 为可拖动列表项绑定拖拽与触摸事件（兼容移动端）。
-     * @param {HTMLElement} el - 列表项元素
-     */
     function addDragListeners(el) {
-        // Touch Support
         el.addEventListener('touchstart', handleTouchStart, {passive: false});
         el.addEventListener('touchmove', handleTouchMove, {passive: false});
         el.addEventListener('touchend', handleTouchEnd);
-        
-        // Mouse Support
         el.setAttribute('draggable', true);
         el.addEventListener('dragstart', handleDragStart);
         el.addEventListener('dragover', handleDragOver);
@@ -1244,33 +2002,19 @@
         el.addEventListener('dragend', handleDragEnd);
     }
 
-    // Desktop Drag
-    /**
-     * 处理拖拽开始事件，设置拖动视觉样式并移除旧的占位符。
-     * 此处也尝试设置透明的拖拽图片以避免浏览器默认的灰色拖影。
-     * @param {DragEvent} e
-     */
     function handleDragStart(e) {
         dragSrcEl = this;
         e.dataTransfer.effectAllowed = 'move';
         e.dataTransfer.setData('text/html', this.innerHTML);
         this.classList.add('dragging');
-        // Remove default drag ghost by using a transparent image
         try {
             const emptyImg = new Image();
             emptyImg.src = 'data:image/svg+xml;charset=utf-8,<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"></svg>';
             e.dataTransfer.setDragImage(emptyImg, 0, 0);
-        } catch (err) {
-            // ignore if setDragImage not allowed
-        }
-        // ensure no stray placeholders remain when starting
+        } catch (err) {}
         cleanupPlaceholders();
     }
 
-    /**
-     * 在列表中显示白色插入指示线，位于指定的相对 top 像素位置。
-     * @param {number} topPx
-     */
     function showInsertIndicatorAt(topPx) {
         if (!inputs.insertIndicator) return;
         inputs.insertIndicator.style.top = `${topPx}px`;
@@ -1281,34 +2025,21 @@
         inputs.insertIndicator.style.display = 'none';
     }
 
-    // Remove stray placeholder or ghost elements that could appear during drag
-    /**
-     * 清理列表中遗留的占位或幽灵节点，防止出现灰色条或残留元素。
-     */
     function cleanupPlaceholders() {
         const container = inputs.imageListContainer;
         if (!container) return;
-        // Remove elements matching common placeholder class names
         const selectors = ['.drag-placeholder', '.placeholder', '.__dragghost', '.ghost', '.drop-placeholder'];
         selectors.forEach(sel => {
             const nodes = container.querySelectorAll(sel);
             nodes.forEach(n => n.remove());
         });
-        // Also remove any direct child with the small gray background we used for empty message accidentally left
         Array.from(container.children).forEach(child => {
             if (child.classList && child.classList.contains('text-center') && child.textContent.trim() === '暂无图片') {
-                // only keep when there are actually no images; otherwise remove
                 if (originalImageObjects.length > 0) child.remove();
             }
         });
     }
 
-    /**
-     * 根据容器内 Y 坐标计算插入索引，保证在相邻两项之间只显示单一插入位置。
-     * @param {HTMLElement} container
-     * @param {number} cursorYContent - 相对于容器内容顶部的 Y（包含 scrollTop）
-     * @returns {number} 插入索引（0..n）
-     */
     function computeInsertIndexFromY(container, cursorYContent) {
         const items = Array.from(container.querySelectorAll('.draggable-item'));
         for (let i = 0; i < items.length; i++) {
@@ -1322,7 +2053,6 @@
     function handleDragOver(e) {
         if (e.preventDefault) e.preventDefault();
         const container = inputs.imageListContainer;
-        // 计算光标在容器内容中的 Y（包含滚动）
         const cursorYContent = (e.clientY - container.getBoundingClientRect().top) + container.scrollTop;
         const insertIndex = computeInsertIndexFromY(container, cursorYContent);
         const items = Array.from(container.querySelectorAll('.draggable-item'));
@@ -1346,10 +2076,17 @@
         const container = inputs.imageListContainer;
         const cursorYContent = (e.clientY - container.getBoundingClientRect().top) + container.scrollTop;
         let insertIndex = computeInsertIndexFromY(container, cursorYContent);
-        // Adjust insert index when removing earlier element
-        if (insertIndex > oldIdx) insertIndex--;
-        // Only move if different
-        if (insertIndex !== oldIdx) moveImage(oldIdx, insertIndex);
+        
+        if (appState.layoutMode === 'free') {
+            const count = originalImageObjects.length;
+            const visualOldIdx = count - 1 - oldIdx;
+            if (insertIndex > visualOldIdx) insertIndex--;
+            const targetArrayIdx = count - 1 - insertIndex;
+            if (targetArrayIdx !== oldIdx) moveImage(oldIdx, targetArrayIdx);
+        } else {
+            if (insertIndex > oldIdx) insertIndex--;
+            if (insertIndex !== oldIdx) moveImage(oldIdx, insertIndex);
+        }
         return false;
     }
 
@@ -1359,19 +2096,14 @@
         cleanupPlaceholders();
     }
 
-    // Mobile Touch Drag (Simplified)
     let touchStartY = 0;
     let touchCurrentEl = null;
 
     function handleTouchStart(e) {
-        // Only trigger if not clicking delete
         if(e.target.tagName === 'BUTTON' || e.target.closest('button')) return;
-        
         touchStartY = e.touches[0].clientY;
         touchCurrentEl = this;
         this.classList.add('dragging');
-        
-        // Disable scroll while dragging
         document.body.style.overflow = 'hidden';
     }
 
@@ -1387,7 +2119,6 @@
         if (insertIndex === 0) {
             insertTop = items[0] ? items[0].offsetTop : 0;
         } else if (insertIndex >= items.length) {
-            // bottom of list
             const last = items[items.length - 1];
             insertTop = last ? (last.offsetTop + last.offsetHeight) : 0;
         } else {
@@ -1404,32 +2135,31 @@
         const cursorYContent = (touchLocation.clientY - container.getBoundingClientRect().top) + container.scrollTop;
         const oldIdx = parseInt(touchCurrentEl.dataset.index);
         let insertIndex = computeInsertIndexFromY(container, cursorYContent);
-        if (insertIndex > oldIdx) insertIndex--;
-        if (insertIndex !== oldIdx) moveImage(oldIdx, insertIndex);
+        
+        if (appState.layoutMode === 'free') {
+            const count = originalImageObjects.length;
+            const visualOldIdx = count - 1 - oldIdx;
+            if (insertIndex > visualOldIdx) insertIndex--;
+            const targetArrayIdx = count - 1 - insertIndex;
+            if (targetArrayIdx !== oldIdx) moveImage(oldIdx, targetArrayIdx);
+        } else {
+            if (insertIndex > oldIdx) insertIndex--;
+            if (insertIndex !== oldIdx) moveImage(oldIdx, insertIndex);
+        }
 
         hideInsertIndicator();
         cleanupPlaceholders();
-
         touchCurrentEl.classList.remove('dragging');
         touchCurrentEl = null;
         document.body.style.overflow = '';
     }
 
-    /**
-     * 移动图片在数组中的顺序并刷新界面。
-     * @param {number} fromIndex
-     * @param {number} toIndex
-     */
     function moveImage(fromIndex, toIndex) {
         const item = originalImageObjects.splice(fromIndex, 1)[0];
         originalImageObjects.splice(toIndex, 0, item);
         refreshAfterImageUpdate();
     }
 
-    /**
-     * 从图片数组中删除指定索引的图片（至少保留一张）。
-     * @param {number} index
-     */
     function removeImage(index) {
         if (originalImageObjects.length <= 1) {
             showToast("至少需要保留 1 张图片", true);
@@ -1439,51 +2169,44 @@
         refreshAfterImageUpdate();
     }
 
-    /**
-     * 图片列表更新后的通用刷新流程：重新计算尺寸、生成拼接图、重新渲染列表并请求预览刷新。
-     */
     function refreshAfterImageUpdate() {
         recalculateDimensions();
         inputs.imgCount.innerText = originalImageObjects.length;
-        generateStitchedBase(); 
+        if (appState.mode === 'self' || appState.mode === 'custom') {
+            generateStitchedBase(); 
+        }
         renderImageList();
         requestRender();
     }
 
-    // --- Logic: Dimensions & Resolution Display ---
+    // --- Core Processing ---
 
-    /**
-     * 计算逻辑画布尺寸（宽度和高度）。
-     * 基于所选图片的最大宽度、边框设置与间隔。单张图片时强制使用外边框。
-     * @returns {{w:number,h:number}}
-     */
     function getLogicalDimensions() {
         if (selectedImages.length === 0) return { w: 0, h: 0 };
         
-        const borderWidth = maxImageWidth * (appState.borderWidthRatio / 100);
-        const totalContentHeight = selectedImages.reduce((sum, item) => sum + item.height, 0);
-        
-        // LOGIC UPDATE: Outer Border Toggle
-        let totalBordersHeight;
-        let finalWidth;
-
-        // Force outer border when there's only one image (ensure four-side border)
-        const outerActive = (originalImageObjects.length === 1) ? true : appState.outerBorder;
-
-        if (outerActive) {
-            // Padding around everything + gaps
-            totalBordersHeight = borderWidth * (selectedImages.length + 1);
-            finalWidth = maxImageWidth + (borderWidth * 2);
+        if (appState.layoutMode === 'free') {
+            // In Free Mode, canvas size is fixed reference width (e.g. 1080) * AspectRatio
+            // User Request: Increase resolution limit to match Strip Mode (which uses maxImageWidth)
+            // We'll use maxImageWidth as reference if available, otherwise fallback to 1080
+            const refWidth = maxImageWidth > 0 ? maxImageWidth : 1080;
+            return { w: refWidth, h: refWidth / appState.canvasRatio };
         } else {
-            // Only gaps between images
-            totalBordersHeight = borderWidth * (selectedImages.length - 1);
-            if (totalBordersHeight < 0) totalBordersHeight = 0; // if 1 image
-            finalWidth = maxImageWidth;
+            // Strip Mode
+            const borderWidth = maxImageWidth * (appState.borderWidthRatio / 100);
+            const totalContentHeight = selectedImages.reduce((sum, item) => sum + item.height, 0);
+            const outerActive = (originalImageObjects.length === 1) ? true : appState.outerBorder;
+            let totalBordersHeight, finalWidth;
+
+            if (outerActive) {
+                totalBordersHeight = borderWidth * (selectedImages.length + 1);
+                finalWidth = maxImageWidth + (borderWidth * 2);
+            } else {
+                totalBordersHeight = borderWidth * (selectedImages.length - 1);
+                if (totalBordersHeight < 0) totalBordersHeight = 0;
+                finalWidth = maxImageWidth;
+            }
+            return { w: finalWidth, h: totalContentHeight + totalBordersHeight };
         }
-        
-        const finalHeight = totalContentHeight + totalBordersHeight;
-        
-        return { w: finalWidth, h: finalHeight };
     }
 
     function updateResolutionDisplay() {
@@ -1492,149 +2215,254 @@
             inputs.resPixelDisplay.textContent = '计算中...';
             return;
         }
-        const scale = appState.exportScale / 100;
+        let scale = appState.exportScale / 100;
+        
+        // Clamp to 20000px limit
+        const maxSide = Math.max(dim.w, dim.h);
+        if (maxSide * scale > 20000) {
+            scale = 20000 / maxSide;
+        }
+
         const finalW = Math.round(dim.w * scale);
         const finalH = Math.round(dim.h * scale);
         inputs.resPixelDisplay.textContent = `${finalW} x ${finalH} px`;
+        
+        if (maxSide * (appState.exportScale / 100) > 20000) {
+             inputs.resPixelDisplay.textContent += ' (已限制最大边长)';
+        }
     }
 
-    // --- Core Logic: Image Processing ---
+    async function createThumbnail(img) {
+        const size = Math.min(img.width, img.height);
+        const sx = (img.width - size) / 2;
+        const sy = (img.height - size) / 2;
+        
+        if (window.createImageBitmap) {
+            try {
+                // Use browser native async scaling
+                return await createImageBitmap(img, sx, sy, size, size, { 
+                    resizeWidth: 80, 
+                    resizeHeight: 80, 
+                    resizeQuality: 'medium' 
+                });
+            } catch (e) {
+                // Fallback if options not supported
+            }
+        }
 
-    // Handle files selected via file input or drop. Supports front-end
-    // HEIC conversion when the conversion library is available.
-    /**
-     * 处理用户选择或拖放的文件，将文件转换为 Image 对象并加入到应用中。
-     * 支持前端 HEIC/HEIF -> JPEG 转换（当 heic2any 可用时）。
-     * @param {Event|Object} e - 文件选择事件或带有 target.files 的对象
-     * @param {boolean} [isReplace=false] - 是否替换当前图片（true: 替换）
-     */
+        const canvas = document.createElement('canvas');
+        canvas.width = 80; canvas.height = 80;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, sx, sy, size, size, 0, 0, 80, 80);
+        return canvas;
+    }
+
     async function handleFiles(e, isReplace = false) {
         let files = Array.from(e.target.files || []);
         if (files.length === 0) return;
 
-        const unsupportedExt = ['heic', 'heif'];
-        const isHeicFile = f => {
-            const fn = f.name || '';
-            const ext = (fn.split('.').pop() || '').toLowerCase();
-            const t = (f.type || '').toLowerCase();
-            return unsupportedExt.includes(ext) || t.includes('heic') || t.includes('heif');
-        };
+        // Limit check
+        const MAX_IMAGES = 9;
+        if (isReplace) {
+            if (files.length > MAX_IMAGES) {
+                showToast(`最多只能选择 ${MAX_IMAGES} 张图片`, true);
+                files = files.slice(0, MAX_IMAGES);
+            }
+        } else {
+            if (originalImageObjects.length + files.length > MAX_IMAGES) {
+                showToast(`最多只能选择 ${MAX_IMAGES} 张图片`, true);
+                const remaining = MAX_IMAGES - originalImageObjects.length;
+                if (remaining <= 0) return;
+                files = files.slice(0, remaining);
+            }
+        }
 
-        const unsupportedFiles = files.filter(isHeicFile);
+        // Show loading immediately
+        toggleLoading(true);
 
-        // If we have HEIC/HEIF files, attempt front-end conversion (heic2any) if available.
-        if (unsupportedFiles.length > 0) {
-            if (typeof heic2any === 'undefined') {
-                const names = unsupportedFiles.map(f => f.name).slice(0,5).join(', ');
-                showToast('不支持 HEIC/HEIF：' + names + '。请转换为 JPG/PNG 再试。', true);
-                // remove unsupported files from list
-                files = files.filter(f => !unsupportedFiles.includes(f));
-                if (files.length === 0) return;
-            } else {
-                // Show conversion message and try converting sequentially to limit memory pressure
-                toggleLoading(true, '正在转换 HEIC/HEIF，请稍候...');
+        // Defer processing to allow UI paint
+        // Minimal delay to yield thread
+        setTimeout(async () => {
+            try {
+                const unsupportedExt = ['heic', 'heif'];
+                const isHeicFile = f => {
+                    const fn = f.name || '';
+                    const ext = (fn.split('.').pop() || '').toLowerCase();
+                    const t = (f.type || '').toLowerCase();
+                    return unsupportedExt.includes(ext) || t.includes('heic') || t.includes('heif');
+                };
 
-                async function convertHeic(file) {
-                    try {
-                        const out = await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.92 });
-                        // heic2any may return a Blob or an Array of Blobs
-                        const blob = Array.isArray(out) ? out[0] : out;
-                        const name = (file.name || 'converted').replace(/\.[^/.]+$/, '') + '.jpg';
-                        return new File([blob], name, { type: 'image/jpeg' });
-                    } catch (convErr) {
-                        console.error('HEIC conversion failed for', file.name, convErr);
-                        showToast('HEIC 转换失败：' + (file.name || ''), true);
-                        return null;
+                const unsupportedFiles = files.filter(isHeicFile);
+
+                if (unsupportedFiles.length > 0) {
+                    if (typeof heic2any === 'undefined') {
+                        const names = unsupportedFiles.map(f => f.name).slice(0,5).join(', ');
+                        showToast('不支持 HEIC/HEIF：' + names, true);
+                        files = files.filter(f => !unsupportedFiles.includes(f));
+                        if (files.length === 0) {
+                            toggleLoading(false);
+                            return;
+                        }
+                    } else {
+                        toggleLoading(true, '正在转换 HEIC/HEIF...');
+                        async function convertHeic(file) {
+                            try {
+                                const out = await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.92 });
+                                const blob = Array.isArray(out) ? out[0] : out;
+                                const name = (file.name || 'converted').replace(/\.[^/.]+$/, '') + '.jpg';
+                                return new File([blob], name, { type: 'image/jpeg' });
+                            } catch (convErr) {
+                                console.error('[PinPic] HEIC conversion error:', convErr);
+                                return null;
+                            }
+                        }
+                        const converted = [];
+                        for (const f of unsupportedFiles) {
+                            const cf = await convertHeic(f);
+                            if (cf) converted.push(cf);
+                        }
+                        toggleLoading(true, '加载中...');
+                        const supported = files.filter(f => !unsupportedFiles.includes(f)).concat(converted);
+                        if (supported.length === 0) {
+                            toggleLoading(false);
+                            return;
+                        }
+                        files = supported;
                     }
                 }
 
-                const converted = [];
-                for (const f of unsupportedFiles) {
-                    const cf = await convertHeic(f);
-                    if (cf) converted.push(cf);
-                }
-
-                // restore generic loading state (will be turned off in finally)
-                toggleLoading(true, '加载中...');
-
-                // Replace original HEIC files with converted ones, keep any originally-supported files
-                const supported = files.filter(f => !unsupportedFiles.includes(f)).concat(converted);
-                if (supported.length === 0) {
-                    // nothing usable after conversion attempts
+                if (isReplace && files.length < 1) {
+                    showToast('请至少选择 1 张图片', true);
                     toggleLoading(false);
                     return;
                 }
-                files = supported;
-            }
-        }
 
-        if (isReplace && files.length < 1) {
-            showToast('请至少选择 1 张图片', true);
-            return;
-        }
-
-        toggleLoading(true);
-
-        try {
-            const promises = files.map(file => {
-                return new Promise((resolve, reject) => {
-                    const img = new Image();
-                    img.onload = () => resolve(img);
-                    img.onerror = () => reject({ fileName: file.name });
-                    img.src = URL.createObjectURL(file);
+                const promises = files.map(file => {
+                    return new Promise((resolve, reject) => {
+                        const img = new Image();
+                        img.onload = () => resolve(img);
+                        img.onerror = () => reject({ fileName: file.name });
+                        img.src = URL.createObjectURL(file);
+                    });
                 });
-            });
 
-            const newImages = await Promise.all(promises);
+                const newImages = await Promise.all(promises);
+                
+                const wrappedImages = [];
+                for (const img of newImages) {
+                    wrappedImages.push({
+                        img: img,
+                        thumbnail: await createThumbnail(img),
+                        width: img.width,
+                        height: img.height,
+                        edit: { sat: 100, bri: 0, con: 100 },
+                        free: { x: 0, y: 0, w: 0, h: 0 }
+                    });
+                    // Yield to UI thread every image to let animation play
+                    await new Promise(r => setTimeout(r, 10));
+                }
 
-            if (isReplace) {
-                originalImageObjects = newImages;
-            } else {
-                originalImageObjects = [...originalImageObjects, ...newImages];
+                if (isReplace) {
+                    originalImageObjects = wrappedImages;
+                } else {
+                    originalImageObjects = [...originalImageObjects, ...wrappedImages];
+                }
+
+                // Fix: Use maxImageWidth as reference for Free Mode default size
+                // If maxImageWidth is not yet calculated (first load), calculate it from current batch
+                let currentMaxW = 0;
+                if (originalImageObjects.length > 0) {
+                    currentMaxW = originalImageObjects.reduce((max, item) => Math.max(max, item.width), 0);
+                }
+                // Fallback to 1080 if something is wrong, but usually we have images
+                const refWidth = currentMaxW > 0 ? currentMaxW : 1080;
+
+                let startY = 20;
+                if (!isReplace && originalImageObjects.length > wrappedImages.length) {
+                    const existing = originalImageObjects.slice(0, originalImageObjects.length - wrappedImages.length);
+                    startY = existing.reduce((max, i) => Math.max(max, (i.free?.y || 0) + (i.free?.h || 0)), 0) + 20;
+                }
+                
+                // NEW LOGIC: Fit images vertically within canvas (User Request)
+                // Only apply this strict fitting when replacing all images (fresh start)
+                if (isReplace) {
+                     const canvasRatio = appState.canvasRatio; // e.g. 9/16
+                     const canvasH = refWidth / canvasRatio;
+                     
+                     const totalGap = (wrappedImages.length + 1) * 20;
+                     const availableH = canvasH - totalGap;
+                     const totalImgH = wrappedImages.reduce((sum, img) => sum + img.height, 0);
+                     
+                     // Scale to fit height, but max width 90% of canvas
+                     // If totalImgH is 0 (shouldn't happen), fallback to 0.9
+                     let scale = totalImgH > 0 ? Math.min(availableH / totalImgH, 0.9) : 0.9;
+                     // Also ensure not too small?
+                     if (scale < 0.05) scale = 0.05; 
+                     
+                     // Check if width constraint is violated (image width * scale > refWidth)
+                     // If so, reduce scale further
+                     const maxImgW = wrappedImages.reduce((max, img) => Math.max(max, img.width), 0);
+                     if (maxImgW * scale > refWidth * 0.9) {
+                         scale = (refWidth * 0.9) / maxImgW;
+                     }
+
+                     wrappedImages.forEach(item => {
+                        item.free.w = item.width * scale;
+                        item.free.h = item.height * scale;
+                        item.free.x = (refWidth - item.free.w) / 2;
+                        item.free.y = startY;
+                        startY += item.free.h + 20;
+                     });
+                } else {
+                     // Append logic: Use a safe default (e.g. 50% width)
+                     wrappedImages.forEach(item => {
+                        const desiredW = refWidth * 0.5;
+                        const scale = desiredW / item.width;
+                        item.free.w = item.width * scale;
+                        item.free.h = item.height * scale;
+                        item.free.x = (refWidth - item.free.w) / 2;
+                        item.free.y = startY;
+                        startY += item.free.h + 20;
+                     });
+                }
+
+                recalculateDimensions();
+                inputs.imgCount.innerText = originalImageObjects.length;
+                renderImageList(); 
+                generateStitchedBase();
+
+                if (isReplace) {
+                    views.home.classList.remove('active');
+                    views.editor.classList.add('active');
+                }
+
+                requestRender();
+
+            } catch (err) {
+                console.error('[PinPic] Error loading images:', err);
+                showToast('图片加载失败', true);
+            } finally {
+                inputs.file.value = '';
+                inputs.addFile.value = '';
+                toggleLoading(false);
             }
-
-            recalculateDimensions();
-            inputs.imgCount.innerText = originalImageObjects.length;
-            renderImageList(); 
-            generateStitchedBase();
-
-            if (isReplace) {
-                views.home.classList.remove('active');
-                views.editor.classList.add('active');
-            }
-
-            requestRender();
-            
-            inputs.file.value = '';
-            inputs.addFile.value = '';
-
-        } catch (err) {
-            console.error(err);
-            if (err && err.fileName) {
-                showToast('图片加载失败：' + err.fileName + '。请检查文件或转换为 JPG/PNG。', true);
-            } else {
-                showToast('图片加载失败，请检查文件格式或网络', true);
-            }
-        } finally {
-            toggleLoading(false);
-        }
+        }, 10);
     }
 
-    /**
-     * 根据当前原始图片对象集合计算内部使用的尺寸信息（selectedImages、maxImageWidth）。
-     * 计算后会更新分辨率显示。
-     */
     function recalculateDimensions() {
         if (originalImageObjects.length === 0) return;
         maxImageWidth = 0;
-        originalImageObjects.forEach(img => {
-            if (img.width > maxImageWidth) maxImageWidth = img.width;
+        originalImageObjects.forEach(item => {
+            if (item.width > maxImageWidth) maxImageWidth = item.width;
         });
-        selectedImages = originalImageObjects.map(img => {
-            const ratio = img.height / img.width;
+        
+        selectedImages = originalImageObjects.map(item => {
+            const ratio = item.height / item.width;
             const newHeight = maxImageWidth * ratio;
             return {
-                img: img,
+                img: item.img,
+                edit: item.edit,
+                free: item.free,
                 width: maxImageWidth,
                 height: newHeight
             };
@@ -1642,14 +2470,9 @@
         updateResolutionDisplay();
     }
 
-    /**
-     * 处理自定义背景图片的选择并加载为 Image 对象。
-     * @param {Event} e
-     */
     function handleCustomBgSelection(e) {
         const file = e.target.files[0];
         if (!file) return;
-
         toggleLoading(true);
         const img = new Image();
         img.onload = () => {
@@ -1664,31 +2487,366 @@
         img.src = URL.createObjectURL(file);
     }
 
-    // Create an offscreen canvas that stacks all selected images vertically
-    // (used for efficient preview/export processing).
-    /**
-     * 生成一个离屏画布，将所有选中的图片在垂直方向上拼接为一张大图。
-     * 用于预览与导出时提高渲染效率。
-     */
     function generateStitchedBase() {
         if (selectedImages.length === 0) return;
-        const totalHeight = selectedImages.reduce((sum, item) => sum + item.height, 0);
         
+        // Generate base for Blur
+        // For Strip mode: existing stack logic
+        // For Free mode: composite all images onto canvas logic
+        
+        let canvasW, canvasH;
+        if (appState.layoutMode === 'free') {
+            const dim = getLogicalDimensions();
+            // Optimization: Cap background generation size
+            const MAX_BG_DIM = 1080;
+            const scale = Math.min(1.0, MAX_BG_DIM / Math.max(dim.w, dim.h));
+            
+            canvasW = dim.w * scale;
+            canvasH = dim.h * scale;
+        } else {
+            // Optimization: Downscale for background generation in Strip Mode
+            // We don't need full resolution for a blurred background
+            const MAX_BG_WIDTH = 1080;
+            const scale = Math.min(1.0, MAX_BG_WIDTH / maxImageWidth);
+            
+            canvasW = maxImageWidth * scale;
+            canvasH = selectedImages.reduce((sum, item) => sum + item.height, 0) * scale;
+        }
+
         const canvas = document.createElement('canvas');
-        canvas.width = maxImageWidth;
-        canvas.height = totalHeight;
+        canvas.width = canvasW;
+        canvas.height = canvasH;
         const ctx = canvas.getContext('2d');
         
-        let currentY = 0;
-        selectedImages.forEach(item => {
-            ctx.drawImage(item.img, 0, currentY, maxImageWidth, item.height);
-            currentY += item.height;
-        });
+        if (appState.layoutMode === 'free') {
+            // Draw composition for background source
+            // Note: canvasW/H are already scaled down
+            const dim = getLogicalDimensions();
+            const scale = canvasW / dim.w;
+
+            ctx.scale(scale, scale);
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0,0, dim.w, dim.h);
+            
+            // Layer 1: Bottom Layer (2x size, default blurred)
+            selectedImages.forEach(item => {
+                 const f = item.free;
+                 const cx = f.x + f.w/2;
+                 const cy = f.y + f.h/2;
+                 
+                 ctx.save();
+                 // Scale 2x from center
+                 ctx.translate(cx, cy);
+                 ctx.scale(2, 2);
+                 ctx.translate(-cx, -cy);
+                 
+                 // Apply default blur for this bottom layer
+                 // We use a fixed blur amount for this "ambient" layer
+                 // Scale blur radius by scale factor to keep visual consistency on small canvas
+                 const blurRadius = 20 * scale;
+                 ctx.filter = `blur(${blurRadius}px) saturate(${item.edit.sat}%) brightness(${100 + item.edit.bri}%) contrast(${item.edit.con}%)`;
+                 ctx.drawImage(item.img, f.x, f.y, f.w, f.h);
+                 ctx.filter = 'none';
+                 ctx.restore();
+            });
+
+            // Layer 2: Middle Layer (1x size, clear by default, will be blurred by global slider)
+            selectedImages.forEach(item => {
+                const e = item.edit;
+                const f = item.free;
+                
+                ctx.filter = `saturate(${e.sat}%) brightness(${100 + e.bri}%) contrast(${e.con}%)`;
+                ctx.drawImage(item.img, f.x, f.y, f.w, f.h);
+                ctx.filter = 'none';
+            });
+        } else {
+            // Strip Mode Background Generation (Optimized)
+            const scale = canvasW / maxImageWidth;
+            let currentY = 0;
+            
+            selectedImages.forEach(item => {
+                const e = item.edit;
+                const drawH = item.height * scale;
+                
+                ctx.filter = `saturate(${e.sat}%) brightness(${100 + e.bri}%) contrast(${e.con}%)`;
+                // Use thumbnail if available for even faster rendering? 
+                // No, thumbnail is 80x80, might be too small for background if blur is low.
+                // Use original img but draw small.
+                ctx.drawImage(item.img, 0, currentY, canvasW, drawH);
+                ctx.filter = 'none';
+                currentY += drawH;
+            });
+        }
         
         stitchedImage = canvas;
     }
 
-    // --- Core Logic: Rendering ---
+    // --- Canvas Interaction (Free Mode) ---
+
+    function setupCanvasInteraction() {
+        const c = inputs.previewCanvas;
+        
+        const getCanvasCoords = (e) => {
+            const rect = c.getBoundingClientRect();
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            
+            // Map screen coords to internal canvas logic coords
+            // NOTE: Render preview scales canvas. We need logical coords.
+            const dim = getLogicalDimensions();
+            const scaleX = dim.w / rect.width;
+            const scaleY = dim.h / rect.height;
+            
+            return {
+                x: (clientX - rect.left) * scaleX,
+                y: (clientY - rect.top) * scaleY
+            };
+        };
+
+        const onDown = (e) => {
+            if (appState.layoutMode !== 'free') return;
+            const pos = getCanvasCoords(e);
+            
+            // Hit Test (Reverse order for top-most first)
+            let hitIndex = -1;
+            let handleType = null; // 'move', 'tl', 'br'
+            
+            // Check active image handles first
+            if (activeImageIndex !== -1 && activeImageIndex < selectedImages.length) {
+                const img = selectedImages[activeImageIndex];
+                const f = img.free;
+                const handleSize = 60; // Logical pixels
+                
+                // TL Resize
+                if (pos.x >= f.x - 20 && pos.x <= f.x + handleSize && pos.y >= f.y - 20 && pos.y <= f.y + handleSize) {
+                    hitIndex = activeImageIndex;
+                    handleType = 'tl';
+                }
+                // TR Resize
+                else if (pos.x >= f.x + f.w - handleSize && pos.x <= f.x + f.w + 20 && pos.y >= f.y - 20 && pos.y <= f.y + handleSize) {
+                    hitIndex = activeImageIndex;
+                    handleType = 'tr';
+                }
+                // BL Resize
+                else if (pos.x >= f.x - 20 && pos.x <= f.x + handleSize && pos.y >= f.y + f.h - handleSize && pos.y <= f.y + f.h + 20) {
+                    hitIndex = activeImageIndex;
+                    handleType = 'bl';
+                }
+                // BR Resize
+                else if (pos.x >= f.x + f.w - handleSize && pos.x <= f.x + f.w + 20 && pos.y >= f.y + f.h - handleSize && pos.y <= f.y + f.h + 20) {
+                    hitIndex = activeImageIndex;
+                    handleType = 'br';
+                }
+                // Move (Body)
+                else if (pos.x >= f.x && pos.x <= f.x + f.w && pos.y >= f.y && pos.y <= f.y + f.h) {
+                    hitIndex = activeImageIndex;
+                    handleType = 'move';
+                }
+            }
+
+            // If no handle hit, check bodies
+            if (hitIndex === -1) {
+                for (let i = selectedImages.length - 1; i >= 0; i--) {
+                    const f = selectedImages[i].free;
+                    if (pos.x >= f.x && pos.x <= f.x + f.w && pos.y >= f.y && pos.y <= f.y + f.h) {
+                        hitIndex = i;
+                        handleType = 'move';
+                        break;
+                    }
+                }
+            }
+
+            if (hitIndex !== -1) {
+                activeImageIndex = hitIndex;
+                const f = selectedImages[hitIndex].free;
+                interactionState = {
+                    type: handleType,
+                    startX: pos.x,
+                    startY: pos.y,
+                    origX: f.x,
+                    origY: f.y,
+                    origW: f.w,
+                    origH: f.h,
+                    aspect: f.w / f.h
+                };
+                renderImageList(); // Update UI list highlight
+                requestRender();
+            } else {
+                // Clicked empty space
+                if (activeImageIndex !== -1) {
+                    activeImageIndex = -1;
+                    renderImageList();
+                    requestRender();
+                }
+            }
+        };
+
+        const onMove = (e) => {
+            if (!interactionState || appState.layoutMode !== 'free') return;
+            e.preventDefault(); // Prevent scroll
+            
+            const pos = getCanvasCoords(e);
+            const img = selectedImages[activeImageIndex];
+            const dx = pos.x - interactionState.startX;
+            const dy = pos.y - interactionState.startY;
+            
+            snapGuides = []; // Reset guides
+
+            if (interactionState.type === 'move') {
+                const rawX = interactionState.origX + dx;
+                const rawY = interactionState.origY + dy;
+                let finalX = rawX;
+                let finalY = rawY;
+                
+                const dim = getLogicalDimensions();
+                // Dynamic threshold: 1.5% of canvas width, min 10px, max 50px
+                const snapThreshold = Math.max(10, Math.min(50, dim.w * 0.015));
+                
+                let minDeltaX = snapThreshold;
+                let minDeltaY = snapThreshold;
+                let snappedXVal = null;
+                let snappedYVal = null;
+                
+                // Collect all X targets (Canvas Edges + Other Images)
+                const targetsX = [0, dim.w/2, dim.w]; 
+                selectedImages.forEach((item, idx) => {
+                    if(idx === activeImageIndex) return;
+                    targetsX.push(item.free.x, item.free.x + item.free.w/2, item.free.x + item.free.w);
+                });
+                
+                // Check My Left Edge
+                targetsX.forEach(t => {
+                    const delta = Math.abs(t - rawX);
+                    if(delta < minDeltaX) { minDeltaX = delta; finalX = t; snappedXVal = t; }
+                });
+                // Check My Center
+                targetsX.forEach(t => {
+                    const myC = rawX + img.free.w/2;
+                    const delta = Math.abs(t - myC);
+                    if(delta < minDeltaX) { minDeltaX = delta; finalX = t - img.free.w/2; snappedXVal = t; }
+                });
+                // Check My Right Edge
+                targetsX.forEach(t => {
+                    const myR = rawX + img.free.w;
+                    const delta = Math.abs(t - myR);
+                    if(delta < minDeltaX) { minDeltaX = delta; finalX = t - img.free.w; snappedXVal = t; }
+                });
+                
+                if (snappedXVal !== null) {
+                    snapGuides.push({ type: 'v', pos: snappedXVal });
+                }
+
+                // Collect all Y targets
+                const targetsY = [0, dim.h/2, dim.h];
+                selectedImages.forEach((item, idx) => {
+                    if(idx === activeImageIndex) return;
+                    targetsY.push(item.free.y, item.free.y + item.free.h/2, item.free.y + item.free.h);
+                });
+                
+                // Check My Top Edge
+                targetsY.forEach(t => {
+                    const delta = Math.abs(t - rawY);
+                    if(delta < minDeltaY) { minDeltaY = delta; finalY = t; snappedYVal = t; }
+                });
+                // Check My Center
+                targetsY.forEach(t => {
+                    const myC = rawY + img.free.h/2;
+                    const delta = Math.abs(t - myC);
+                    if(delta < minDeltaY) { minDeltaY = delta; finalY = t - img.free.h/2; snappedYVal = t; }
+                });
+                // Check My Bottom Edge
+                targetsY.forEach(t => {
+                    const myR = rawY + img.free.h;
+                    const delta = Math.abs(t - myR);
+                    if(delta < minDeltaY) { minDeltaY = delta; finalY = t - img.free.h; snappedYVal = t; }
+                });
+
+                if (snappedYVal !== null) {
+                    snapGuides.push({ type: 'h', pos: snappedYVal });
+                }
+
+                img.free.x = finalX;
+                img.free.y = finalY;
+            }  
+            else if (interactionState.type === 'br') {
+                // Resize Bottom Right - Maintain Aspect
+                let newW = interactionState.origW + dx;
+                if (newW < 50) newW = 50;
+                let newH = newW / interactionState.aspect;
+                img.free.w = newW;
+                img.free.h = newH;
+            }
+            else if (interactionState.type === 'tr') {
+                // Resize Top Right - Anchor BL
+                // Width changes with dx, Height changes with width (aspect)
+                // Y must change to keep Bottom fixed
+                
+                // Calculate new Width based on mouse X
+                // Mouse moving right increases width
+                let newW = interactionState.origW + dx;
+                if (newW < 50) newW = 50;
+                let newH = newW / interactionState.aspect;
+                
+                // Anchor is Bottom-Left (x, y+h)
+                // New Y = (Old Y + Old H) - New H
+                const blY = interactionState.origY + interactionState.origH;
+                
+                img.free.y = blY - newH;
+                img.free.w = newW;
+                img.free.h = newH;
+            }
+            else if (interactionState.type === 'bl') {
+                // Resize Bottom Left - Anchor TR
+                // Width changes with -dx (moving left increases width)
+                
+                const trX = interactionState.origX + interactionState.origW;
+                
+                let newW = (trX - pos.x);
+                if (newW < 50) newW = 50;
+                let newH = newW / interactionState.aspect;
+                
+                img.free.x = trX - newW;
+                img.free.w = newW;
+                img.free.h = newH;
+            }
+            else if (interactionState.type === 'tl') {
+                // Resize Top Left - Harder, anchor BR
+                const brX = interactionState.origX + interactionState.origW;
+                const brY = interactionState.origY + interactionState.origH;
+                
+                let newW = (brX - pos.x);
+                if(newW < 50) newW = 50;
+                let newH = newW / interactionState.aspect;
+                
+                img.free.x = brX - newW;
+                img.free.y = brY - newH;
+                img.free.w = newW;
+                img.free.h = newH;
+            }
+            
+            requestRender();
+        };
+
+        const onUp = () => {
+            if(interactionState) {
+                // Update blur base on drop if using self blur
+                if((appState.mode === 'self' || appState.mode === 'custom') && appState.layoutMode === 'free') {
+                    generateStitchedBase();
+                    requestRender();
+                }
+                interactionState = null;
+                snapGuides = []; // Clear guides
+                requestRender();
+            }
+        };
+
+        c.addEventListener('mousedown', onDown);
+        c.addEventListener('touchstart', onDown, {passive: false});
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('touchmove', onMove, {passive: false});
+        window.addEventListener('mouseup', onUp);
+        window.addEventListener('touchend', onUp);
+    }
 
     function renderPreview(isExport = false) {
         if (selectedImages.length === 0) return;
@@ -1705,6 +2863,11 @@
         
         if (isExport) {
             renderScale = appState.exportScale / 100;
+            // Limit max dimension to 20000px to prevent canvas errors
+            const maxSide = Math.max(finalWidth, finalHeight);
+            if (maxSide * renderScale > 20000) {
+                renderScale = 20000 / maxSide;
+            }
         } else {
             const MAX_PREVIEW_WIDTH = 1080;
             if (finalWidth > MAX_PREVIEW_WIDTH) {
@@ -1718,16 +2881,107 @@
         ctx.save();
         ctx.scale(renderScale, renderScale);
 
-        // 1. Draw Background
-        // Logic Update: If outerBorder is FALSE, background is only visible in gaps.
-        // However, canvas size matches content, so background is simply drawn behind.
+        // --- DRAW BACKGROUND ---
         
-        // Outer active when single image is selected
-        const outerActive = (originalImageObjects.length === 1) ? true : appState.outerBorder;
-
+        // --- DRAW BACKGROUND ---
+        
         if (appState.mode === 'solid') {
             ctx.fillStyle = appState.solidColor;
             ctx.fillRect(0, 0, finalWidth, finalHeight);
+        } else if (appState.layoutMode === 'free' && appState.mode === 'self') {
+            // Free Mode + Self Blur: Render per-image background to ensure alignment
+            ctx.fillStyle = '#111';
+            ctx.fillRect(0, 0, finalWidth, finalHeight);
+
+            // Create a temporary canvas for layer grouping to allow "Same Level Mix, Different Level Cover"
+            const offCanvas = document.createElement('canvas');
+            offCanvas.width = canvas.width;
+            offCanvas.height = canvas.height;
+            const offCtx = offCanvas.getContext('2d');
+            offCtx.scale(renderScale, renderScale);
+
+            // --- Loop 1: Bottom Layers (Ambient) ---
+            // Draw all bottom layers into offCanvas using selected blend mode
+            offCtx.globalCompositeOperation = appState.bgBlendMode || 'screen';
+            selectedImages.forEach(item => {
+                const f = item.free;
+                const cx = f.x + f.w / 2;
+                const cy = f.y + f.h / 2;
+
+                offCtx.save();
+                offCtx.translate(cx, cy);
+                // Use scaleFree for Free Mode
+                const bottomScale = 2.0 * (appState.scaleFree / 100);
+                offCtx.scale(bottomScale, bottomScale);
+                offCtx.translate(-cx, -cy);
+                
+                // Ambient blur: Base (20px) + Variable (Blur Setting)
+                // Even if blur is 0, we keep a base blur for the ambient layer
+                // Fix: Scale blur by renderScale to prevent huge performance cost and visual mismatch
+                const baseBlur = 20 * (finalWidth/1080) * renderScale;
+                // Fix: Use 1000 divisor for Free Mode too (User Request)
+                const variableBlur = appState.blur * (finalWidth/1000) * renderScale;
+                const ambientBlur = baseBlur + variableBlur;
+                
+                offCtx.filter = `blur(${ambientBlur}px) saturate(${item.edit.sat}%) brightness(${100 + item.edit.bri}%) contrast(${item.edit.con}%)`;
+                offCtx.drawImage(item.img, f.x, f.y, f.w, f.h);
+                offCtx.restore();
+            });
+
+            // Composite Bottom Group onto Main Canvas
+            // Default source-over will cover the black background
+            ctx.drawImage(offCanvas, 0, 0, finalWidth, finalHeight);
+
+            // --- Loop 2: Middle Layers (Adjustable) ---
+            // Clear offCanvas for reuse
+            offCtx.save();
+            offCtx.setTransform(1,0,0,1,0,0);
+            offCtx.clearRect(0, 0, offCanvas.width, offCanvas.height);
+            offCtx.restore();
+
+            // Draw all middle layers into offCanvas using selected blend mode
+            offCtx.globalCompositeOperation = appState.bgBlendMode || 'screen';
+            selectedImages.forEach(item => {
+                const f = item.free;
+                const cx = f.x + f.w / 2;
+                const cy = f.y + f.h / 2;
+
+                offCtx.save();
+                offCtx.translate(cx, cy);
+                // Use scaleFree for Free Mode
+                const midScale = appState.scaleFree / 100;
+                offCtx.scale(midScale, midScale);
+                offCtx.translate(-cx, -cy);
+
+                let filterEffects = [];
+                if (appState.blur > 0) {
+                    // Fix: Scale blur by renderScale
+                    const blurRadius = appState.blur * (finalWidth/1000) * renderScale; 
+                    filterEffects.push(`blur(${blurRadius}px)`);
+                }
+                if (appState.saturation !== 100) filterEffects.push(`saturate(${appState.saturation}%)`);
+                
+                if (filterEffects.length > 0) offCtx.filter = filterEffects.join(' ');
+                offCtx.drawImage(item.img, f.x, f.y, f.w, f.h);
+                offCtx.restore();
+            });
+
+            // Composite Middle Group onto Main Canvas
+            // source-over will cover the Bottom Group
+            ctx.drawImage(offCanvas, 0, 0, finalWidth, finalHeight);
+
+            // Global Brightness Overlay
+            if (appState.brightness !== 0) {
+                ctx.save();
+                if (appState.brightness < 0) {
+                    ctx.fillStyle = `rgba(0,0,0,${Math.abs(appState.brightness) / 100})`;
+                } else {
+                    ctx.fillStyle = `rgba(255,255,255,${appState.brightness / 100})`;
+                }
+                ctx.fillRect(0, 0, finalWidth, finalHeight);
+                ctx.restore();
+            }
+
         } else {
             let bgSource = (appState.mode === 'custom' && customBgImage) ? customBgImage : stitchedImage;
             
@@ -1736,9 +2990,6 @@
                 ctx.fillStyle = '#000';
                 ctx.fillRect(0,0, finalWidth, finalHeight);
 
-                // IMPORTANT: When outer border is gone, the canvas aspect ratio changes.
-                // The background logic should adapt to fill the new canvas size.
-                
                 const bgRatio = bgSource.width / bgSource.height;
                 const canvasRatio = finalWidth / finalHeight;
                 
@@ -1751,7 +3002,10 @@
                     drawW = finalHeight * bgRatio;
                 }
 
-                const scaleMult = appState.scale / 100;
+                // Use scaleStrip for Strip Mode (or scaleFree if in free mode but custom bg)
+                // Actually, if layoutMode is free, we use scaleFree. If strip, scaleStrip.
+                const currentScaleVal = appState.layoutMode === 'free' ? appState.scaleFree : appState.scaleStrip;
+                const scaleMult = currentScaleVal / 100;
                 drawW *= scaleMult;
                 drawH *= scaleMult;
 
@@ -1763,9 +3017,40 @@
                 const targetX = centerX - (drawW / 2);
                 const targetY = centerY - (drawH / 2);
 
+                // --- Layer 1: Bottom (Larger, More Blurred) ---
+                // This layer is scaled up (e.g. 1.5x) relative to the middle layer
+                // and has stronger blur.
+                // Only render this ambient layer if NOT in strip mode (per user request)
+                if (appState.layoutMode !== 'strip') {
+                    ctx.save();
+                    const bottomScale = 1.5;
+                    const bottomW = drawW * bottomScale;
+                    const bottomH = drawH * bottomScale;
+                    const bottomX = centerX - (bottomW / 2);
+                    const bottomY = centerY - (bottomH / 2);
+                    
+                    let bottomFilter = [];
+                    // Base blur for bottom layer is higher
+                    // Fix: Scale blur by renderScale
+                    const bottomBlurRadius = ((appState.blur * 2.5) * (finalWidth/1000) * renderScale); 
+                    if (bottomBlurRadius > 0) bottomFilter.push(`blur(${bottomBlurRadius}px)`);
+                    if (appState.saturation !== 100) bottomFilter.push(`saturate(${appState.saturation}%)`);
+                    
+                    if (bottomFilter.length > 0) ctx.filter = bottomFilter.join(' ');
+                    ctx.drawImage(bgSource, bottomX, bottomY, bottomW, bottomH);
+                    ctx.filter = 'none';
+                    ctx.restore();
+                }
+
+                // --- Layer 2: Middle (Standard) ---
                 let filterEffects = [];
                 if (appState.blur > 0) {
-                    const blurRadius = (appState.blur * (finalWidth/1000)) * renderScale; 
+                    // Fix: Unified blur multiplier for both modes (User request)
+                    // Previous: Strip mode used 200/50, now back to 1000 (same as Free mode)
+                    // New Request: Both modes use 1000
+                    // Fix: Scale blur by renderScale
+                    const divisor = 1000;
+                    const blurRadius = (appState.blur * (finalWidth/divisor) * renderScale); 
                     filterEffects.push(`blur(${blurRadius}px)`);
                 }
                 if (appState.saturation !== 100) {
@@ -1773,7 +3058,6 @@
                 }
 
                 if (filterEffects.length > 0) ctx.filter = filterEffects.join(' ');
-
                 ctx.drawImage(bgSource, targetX, targetY, drawW, drawH);
                 ctx.filter = 'none';
 
@@ -1793,65 +3077,252 @@
             }
         }
 
-        // 2. Draw Images
-        let currentY;
-        let xPos;
-        
-        if (outerActive) {
-            currentY = borderWidth;
-            xPos = borderWidth;
-        } else {
-            currentY = 0;
-            xPos = 0;
-        }
+        // --- DRAW CONTENT ---
 
-        selectedImages.forEach(imgData => {
-            ctx.drawImage(imgData.img, xPos, currentY, maxImageWidth, imgData.height);
-            currentY += (imgData.height + borderWidth);
-        });
+        if (appState.layoutMode === 'free') {
+            // Free Mode Rendering
+            selectedImages.forEach((item, idx) => {
+                const e = item.edit;
+                const f = item.free;
+                
+                ctx.save();
+                
+                // Explicitly reset shadow
+                ctx.shadowColor = 'transparent';
+                ctx.shadowBlur = 0;
+                
+                // Shadow
+                if (appState.shadow && appState.shadow.enabled === true) {
+                    const s = appState.shadow;
+                    // Calculate X/Y from Distance/Angle
+                    // Fix: Remove renderScale to prevent double scaling
+                    // Add shadowScaleFactor for consistency with high-res images
+                    const shadowScaleFactor = finalWidth / 1080;
+
+                    const dist = (s.distance || 0) * shadowScaleFactor;
+                    const angleRad = (s.angle || 0) * (Math.PI / 180);
+                    const offX = dist * Math.cos(angleRad);
+                    const offY = dist * Math.sin(angleRad);
+                    
+                    const sizeVal = (s.size || 0) * shadowScaleFactor;
+                    // Fix: Scale blur by renderScale
+                    const blurVal = s.blur * shadowScaleFactor * renderScale;
+                    const color = hexToRgba(s.color, s.opacity);
+
+                    ctx.save();
+                    // Draw shadow rect behind image (Spread simulation)
+                    // Use filter: blur() instead of shadowBlur to blur the rect itself
+                    ctx.fillStyle = color;
+                    if (blurVal > 0) {
+                        ctx.filter = `blur(${blurVal}px)`;
+                    }
+                    
+                    // Draw the rect at the offset position, expanded by sizeVal
+                    ctx.fillRect(f.x + offX - sizeVal, f.y + offY - sizeVal, f.w + 2*sizeVal, f.h + 2*sizeVal);
+                    ctx.restore();
+                }
+
+                ctx.filter = `saturate(${e.sat}%) brightness(${100 + e.bri}%) contrast(${e.con}%)`;
+                ctx.drawImage(item.img, f.x, f.y, f.w, f.h);
+                ctx.filter = 'none';
+                ctx.restore();
+
+                // Selection Overlay (Only if not exporting)
+                if (!isExport && idx === activeImageIndex) {
+                    ctx.save();
+                    ctx.strokeStyle = '#29499d';
+                    ctx.lineWidth = 2 / renderScale; 
+                    ctx.strokeRect(f.x, f.y, f.w, f.h);
+                    
+                    // Draw Corner Brackets
+                    const bLen = 20 / renderScale;
+                    const bThick = 4 / renderScale;
+                    
+                    ctx.fillStyle = '#29499d';
+                    ctx.strokeStyle = 'white';
+                    ctx.lineWidth = 2 / renderScale;
+
+                    const drawL = (x, y, isRight, isBottom) => {
+                        ctx.beginPath();
+                        const xDir = isRight ? -1 : 1;
+                        const yDir = isBottom ? -1 : 1;
+                        
+                        ctx.moveTo(x, y);
+                        ctx.lineTo(x + (bLen * xDir), y);
+                        ctx.lineTo(x + (bLen * xDir), y + (bThick * yDir));
+                        ctx.lineTo(x + (bThick * xDir), y + (bThick * yDir));
+                        ctx.lineTo(x + (bThick * xDir), y + (bLen * yDir));
+                        ctx.lineTo(x, y + (bLen * yDir));
+                        ctx.closePath();
+                        
+                        ctx.fill();
+                        ctx.stroke();
+                    };
+
+                    drawL(f.x, f.y, false, false); // TL
+                    drawL(f.x + f.w, f.y, true, false); // TR
+                    drawL(f.x, f.y + f.h, false, true); // BL
+                    drawL(f.x + f.w, f.y + f.h, true, true); // BR
+
+                    ctx.restore();
+                }
+            });
+
+            // Draw Snap Guides (if any)
+            if (!isExport && snapGuides && snapGuides.length > 0) {
+                ctx.save();
+                ctx.strokeStyle = '#0099ff'; // Blue color for snap lines
+                ctx.lineWidth = 2 / renderScale;
+                ctx.setLineDash([5 / renderScale, 5 / renderScale]); // Dashed line
+                
+                snapGuides.forEach(g => {
+                    ctx.beginPath();
+                    if (g.type === 'v') {
+                        ctx.moveTo(g.pos, 0);
+                        ctx.lineTo(g.pos, finalHeight);
+                    } else {
+                        ctx.moveTo(0, g.pos);
+                        ctx.lineTo(finalWidth, g.pos);
+                    }
+                    ctx.stroke();
+                });
+                ctx.restore();
+            }
+        } else {
+
+            // Strip Mode Rendering
+            // Fix: Respect outerBorder setting even for single images
+            const outerActive = appState.outerBorder;
+            let currentY, xPos;
+            
+            if (outerActive) {
+                currentY = borderWidth;
+                xPos = borderWidth;
+            } else {
+                currentY = 0;
+                xPos = 0;
+            }
+
+            selectedImages.forEach(item => {
+                const e = item.edit;
+                
+                ctx.save();
+                // Explicitly reset shadow to ensure no bleeding from previous states
+                ctx.shadowColor = 'transparent';
+                ctx.shadowBlur = 0;
+                
+                if (appState.shadow && appState.shadow.enabled === true) {
+                    const s = appState.shadow;
+                    // Scale shadow relative to image width to keep consistent look
+                    // Base reference width 1080px
+                    const shadowScaleFactor = maxImageWidth / 1080;
+                    
+                    const dist = (s.distance || 0) * shadowScaleFactor;
+                    const angleRad = (s.angle || 0) * (Math.PI / 180);
+                    const offX = dist * Math.cos(angleRad);
+                    const offY = dist * Math.sin(angleRad);
+                    const sizeVal = (s.size || 0) * shadowScaleFactor;
+                    // Fix: Scale blur by renderScale
+                    const blurVal = s.blur * shadowScaleFactor * renderScale;
+                    const color = hexToRgba(s.color, s.opacity);
+                    
+                    ctx.save();
+                    ctx.fillStyle = color;
+                    if (blurVal > 0) {
+                        ctx.filter = `blur(${blurVal}px)`;
+                    }
+                    
+                    // Draw shadow rect (Spread)
+                    ctx.fillRect(xPos + offX - sizeVal, currentY + offY - sizeVal, maxImageWidth + 2*sizeVal, item.height + 2*sizeVal);
+                    ctx.restore();
+                }
+
+                ctx.filter = `saturate(${e.sat}%) brightness(${100 + e.bri}%) contrast(${e.con}%)`;
+                ctx.drawImage(item.img, xPos, currentY, maxImageWidth, item.height);
+                ctx.filter = 'none'; 
+                ctx.restore();
+
+                currentY += (item.height + borderWidth);
+            });
+        }
 
         ctx.restore();
     }
 
-    // --- Save / Export ---
-
     function handleSave() {
         if (!selectedImages.length) return;
-
         toggleLoading(true);
-
         setTimeout(() => {
             renderPreview(true);
-            
             const canvas = inputs.previewCanvas;
             const link = document.createElement('a');
-            
             const now = new Date();
-            const timestamp = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}${String(now.getSeconds()).padStart(2,'0')}`;
+            const timestamp = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}`;
             
-            link.download = `PinPic-${timestamp}.jpg`;
+            link.download = `PinPhotograph-${timestamp}.jpg`;
             const qualityVal = Math.max(0.1, Math.min(1.0, appState.exportQuality / 100));
             link.href = canvas.toDataURL('image/jpeg', qualityVal);
-            
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
-
             requestRender();
-
             toggleLoading(false);
             showToast('输出已完成', false);
-
-            inputs.btnHome.classList.remove('hidden');
         }, 300); 
     }
 
-    function toggleLoading(show) {
-        const txt = (typeof msg === 'string' && msg.length) ? msg : '正在处理...';
-        const label = inputs.loading.querySelector('span');
-        if (label) label.innerText = txt;
-        if (show) inputs.loading.classList.remove('hidden');
-        else inputs.loading.classList.add('hidden');
+    function toggleLoading(show, msg) {
+        let el = document.getElementById('loading-indicator');
+        if (!el) return;
+
+        // Ensure it's the last element in body to be on top of everything
+        if (show && document.body.lastElementChild !== el) {
+            document.body.appendChild(el);
+        }
+
+        const label = el.querySelector('span');
+        if (label && typeof msg === 'string') label.innerText = msg;
+        
+        if (show) {
+            // Use setProperty with 'important' for maximum priority
+            el.style.setProperty('display', 'flex', 'important');
+            el.style.setProperty('position', 'fixed', 'important');
+            el.style.setProperty('top', '0', 'important');
+            el.style.setProperty('left', '0', 'important');
+            el.style.setProperty('right', '0', 'important');
+            el.style.setProperty('bottom', '0', 'important');
+            el.style.setProperty('width', 'auto', 'important');
+            el.style.setProperty('height', 'auto', 'important');
+            // Blur effect background - Removed for performance
+            el.style.setProperty('background-color', 'rgba(0,0,0,0.7)', 'important');
+            // el.style.setProperty('backdrop-filter', 'blur(10px)', 'important');
+            // el.style.setProperty('-webkit-backdrop-filter', 'blur(10px)', 'important');
+            
+            el.style.setProperty('z-index', '2147483647', 'important');
+            el.style.setProperty('flex-direction', 'column', 'important');
+            el.style.setProperty('align-items', 'center', 'important');
+            el.style.setProperty('justify-content', 'center', 'important');
+            el.style.setProperty('color', 'white', 'important');
+            el.style.setProperty('visibility', 'visible', 'important');
+            
+            // Smooth fade in
+            el.style.setProperty('opacity', '0', 'important');
+            el.style.setProperty('transition', 'opacity 0.3s ease', 'important');
+            requestAnimationFrame(() => {
+                el.style.setProperty('opacity', '1', 'important');
+            });
+            
+            el.style.setProperty('pointer-events', 'all', 'important');
+
+            // Force repaint
+            void el.offsetWidth;
+        } else {
+            // Smooth fade out
+            el.style.setProperty('opacity', '0', 'important');
+            setTimeout(() => {
+                el.style.setProperty('display', 'none', 'important');
+            }, 300);
+        }
     }
 
     function showToast(msg, isError = false) {
@@ -1859,23 +3330,12 @@
         document.getElementById('toast-msg').innerText = msg;
         const ico = document.getElementById('toast-icon');
         if (isError) {
-            // red cross
-            ico.innerHTML = `
-                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" class="w-5 h-5">
-                  <path d="M6 6L18 18" stroke="#e53935" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-                  <path d="M6 18L18 6" stroke="#e53935" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-                </svg>`;
+            ico.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="#e53935" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5"><path d="M6 6L18 18"/><path d="M6 18L18 6"/></svg>`;
         } else {
-            // success check
-            ico.innerHTML = `
-                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" class="w-5 h-5">
-                  <path d="M5 13l4 4L19 7" stroke="#4CAF50" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-                </svg>`;
+            ico.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="#4CAF50" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5"><path d="M5 13l4 4L19 7"/></svg>`;
         }
-
         toast.style.opacity = '1';
         toast.style.transform = 'translate(-50%, -20px)';
-        
         setTimeout(() => {
             toast.style.opacity = '0';
             toast.style.transform = 'translate(-50%, 0)';
@@ -1902,8 +3362,31 @@
         });
     }
 
-    init();
+    function hexToRgba(hex, alpha) {
+        let r = 0, g = 0, b = 0;
+        if (hex.startsWith('#')) hex = hex.slice(1);
+        if (hex.length === 3) {
+            r = parseInt(hex[0] + hex[0], 16);
+            g = parseInt(hex[1] + hex[1], 16);
+            b = parseInt(hex[2] + hex[2], 16);
+        } else if (hex.length === 6) {
+            r = parseInt(hex.substring(0, 2), 16);
+            g = parseInt(hex.substring(2, 4), 16);
+            b = parseInt(hex.substring(4, 6), 16);
+        }
+        return `rgba(${r},${g},${b},${alpha})`;
+    }
 
+    function centerImage(index) {
+        if (index < 0 || index >= selectedImages.length) return;
+        const item = selectedImages[index];
+        const dim = getLogicalDimensions();
+        item.free.x = (dim.w - item.free.w) / 2;
+        item.free.y = (dim.h - item.free.h) / 2;
+        requestRender();
+    }
+
+    init();
 </script>
 </body>
 </html>
