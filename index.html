@@ -114,14 +114,18 @@
         .delay-200 { animation-delay: 200ms; }
         .delay-300 { animation-delay: 300ms; }
 
-        .controls-scroll::-webkit-scrollbar { width: 4px; }
-        .controls-scroll::-webkit-scrollbar-thumb { background-color: #555; border-radius: 4px; }
+        /* Unified dark rounded scrollbar for control panels and lists */
+        .controls-scroll { scrollbar-width: thin; scrollbar-color: #555 rgba(0,0,0,0.12); }
+        .controls-scroll::-webkit-scrollbar { width: 10px; height: 10px; }
+        .controls-scroll::-webkit-scrollbar-track { background: rgba(0,0,0,0.12); border-radius: 8px; }
+        .controls-scroll::-webkit-scrollbar-thumb { background: #555; border-radius: 8px; border: 2px solid rgba(0,0,0,0); background-clip: padding-box; }
+        .controls-scroll::-webkit-scrollbar-thumb:hover { background-color: #666; }
+        /* Hide native up/down arrow buttons and corner to avoid triangle indicators */
+        .controls-scroll::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
+        .controls-scroll::-webkit-scrollbar-corner { background: transparent; }
 
         /* Prevent horizontal scrollbar / phantom bar in image list; always show vertical bar */
         #image-list-container { overflow-x: hidden; overflow-y: scroll; scrollbar-gutter: stable; -webkit-overflow-scrolling: touch; }
-        #image-list-container::-webkit-scrollbar { width: 10px; height: 0px; }
-        #image-list-container::-webkit-scrollbar-track { background: rgba(0,0,0,0.12); border-radius:8px; }
-        #image-list-container::-webkit-scrollbar-thumb { background: #555; border-radius: 8px; border: 2px solid rgba(0,0,0,0); background-clip: padding-box; }
         /* Firefox */
         #image-list-container { scrollbar-width: auto; scrollbar-color: #555 rgba(0,0,0,0.12); }
 
@@ -254,10 +258,17 @@
         .corner-bl { bottom: -2px; left: -2px; border-right: 0; border-top: 0; cursor: nesw-resize; }
         .corner-br { bottom: -2px; right: -2px; border-left: 0; border-top: 0; cursor: nwse-resize; }
 
-        /* Solid selection border for Free Mode */
+        /* Solid selection border for Free Mode (improved visual) */
         .free-selected {
-            outline: 2px solid #29499d;
-            z-index: 50;
+            border-color: var(--theme-blue) !important;
+            box-shadow: 0 8px 20px rgba(41,73,157,0.16);
+            transform: translateY(-1px);
+            z-index: 60;
+        }
+        /* When a draggable item is selected, ensure visible blue ring and spacing */
+        .draggable-item.free-selected {
+            border-color: var(--theme-blue) !important;
+            background: linear-gradient(180deg, rgba(41,73,157,0.03), rgba(41,73,157,0.01));
         }
 
         /* Layout Mode Switcher */
@@ -323,8 +334,8 @@
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                     </svg>
                 </div>
-                <h1 class="text-3xl font-bold mt-6 tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-400">PinPhotograph</h1>
-                <p class="text-gray-400 text-sm mt-2 font-light">极简长图拼接工具</p>
+                <h1 class="text-3xl font-bold mt-6 tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-400 py-1">PinPhotograph</h1>
+                <p class="text-gray-400 text-sm mt-6 font-light">图片拼接工具</p>
             </div>
 
             <div class="space-y-4 w-full max-w-xs mx-auto delay-100 animate-slide-up" style="opacity: 0; animation-fill-mode: forwards;">
@@ -335,12 +346,16 @@
                     <span class="text-lg">选择图片</span>
                 </button>
                 
-                <div class="text-xs text-gray-500 pt-4">
-                    支持 JPG / PNG / HEIC 格式
-                </div>
+                
             </div>
         </div>
-        
+
+        <!-- Home footer: project link (显示为「项目地址」，点击在新窗口打开) -->
+        <div class="absolute bottom-4 left-0 right-0 text-center z-20 pointer-events-auto">
+            <a id="home-project-link" href="https://github.com/WarpTraveller/PinPhotograph" target="_blank" rel="noopener" class="text-[#74a3ff] hover:underline font-medium" title="在新窗口打开项目源码（GitHub）">项目地址</a>
+            
+        </div>
+
         <!-- Hidden Inputs -->
         <input type="file" id="file-input" multiple accept="image/*" class="hidden">
         <input type="file" id="add-file-input" multiple accept="image/*" class="hidden">
@@ -406,9 +421,13 @@
                 <!-- Image Management Section -->
                 <div class="bg-[#3a3a45] p-4 rounded-2xl shadow-sm">
                     <div class="flex items-center justify-between mb-3 border-b border-gray-600 pb-2">
-                        <span class="text-sm font-medium text-gray-300">图片列表 (<span id="img-count">0</span>)</span>
+                        <span id="image-list-title" class="text-sm font-medium text-gray-300">图片列表 (<span id="img-count">0</span>)</span>
                         
                         <div class="flex space-x-2">
+                            <button id="btn-multiselect" class="btn-ripple bg-[#444] hover:bg-[#555] text-white px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center space-x-1 shadow-sm" title="多选">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"></rect><rect x="14" y="3" width="7" height="7" rx="1"></rect><rect x="3" y="14" width="7" height="7" rx="1"></rect></svg>
+                                <span>多选</span>
+                            </button>
                              <button id="btn-add-images" class="btn-ripple bg-[#29499d] hover:bg-[#345ac5] text-white px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center space-x-1 shadow-sm">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
                                 <span>添加</span>
@@ -657,32 +676,54 @@
                     </button>
                 </div>
                 
-                <div class="space-y-6 overflow-y-auto pb-4">
+                <div class="space-y-6 overflow-y-auto pb-4 controls-scroll flex-1 pr-2">
                     <!-- Saturation -->
                     <div>
                         <div class="flex justify-between items-center mb-1">
                             <label class="text-sm font-medium text-gray-300">饱和度</label>
-                            <input type="number" id="drawer-val-sat" min="0" max="200" class="w-16">
+                            <input type="number" id="drawer-val-sat" min="0" max="200" class="w-16 bg-[#333] text-white rounded px-2 py-1 text-right border border-[#444]">
                         </div>
-                        <input type="range" id="drawer-slider-sat" min="0" max="200" value="100">
+                        <input type="range" id="drawer-slider-sat" min="0" max="200" value="100" class="w-full h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer">
                     </div>
                     
                     <!-- Brightness (Exposure) -->
                     <div>
                         <div class="flex justify-between items-center mb-1">
                             <label class="text-sm font-medium text-gray-300">曝光度</label>
-                            <input type="number" id="drawer-val-bri" min="-100" max="100" class="w-16">
+                            <input type="number" id="drawer-val-bri" min="-100" max="100" class="w-16 bg-[#333] text-white rounded px-2 py-1 text-right border border-[#444]">
                         </div>
-                        <input type="range" id="drawer-slider-bri" min="-100" max="100" value="0">
+                        <input type="range" id="drawer-slider-bri" min="-100" max="100" value="0" class="w-full h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer">
                     </div>
                     
                     <!-- Contrast -->
                     <div>
                         <div class="flex justify-between items-center mb-1">
                             <label class="text-sm font-medium text-gray-300">对比度</label>
-                            <input type="number" id="drawer-val-con" min="0" max="200" class="w-16">
+                            <input type="number" id="drawer-val-con" min="0" max="200" class="w-16 bg-[#333] text-white rounded px-2 py-1 text-right border border-[#444]">
                         </div>
-                        <input type="range" id="drawer-slider-con" min="0" max="200" value="100">
+                        <input type="range" id="drawer-slider-con" min="0" max="200" value="100" class="w-full h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer">
+                    </div>
+
+                    <!-- Crop Editor -->
+                    <div id="drawer-crop-section" class="pt-4">
+                        <div class="flex items-center justify-between mb-2">
+                            <label class="text-sm font-medium text-gray-300">裁切</label>
+                        </div>
+                        <!-- Inline crop area: no deep gray container to match other panels -->
+                        <canvas id="drawer-crop-canvas" style="width:100%; height:420px; background:transparent; display:block; border-radius:6px; outline:1px solid rgba(255,255,255,0.03);"></canvas>
+                        <div id="crop-ratio-buttons" style="display:flex; gap:8px; align-items:center; margin-top:10px;">
+                            <button type="button" data-ratio="free" class="px-3 py-1 rounded text-sm text-gray-200 bg-transparent hover:bg-[#3a3a45] cursor-pointer border border-transparent">自由</button>
+                            <button type="button" data-ratio="orig" class="px-3 py-1 rounded text-sm text-gray-200 bg-transparent hover:bg-[#3a3a45] cursor-pointer border border-transparent">原比例</button>
+                            <button type="button" data-ratio="9:16" class="px-3 py-1 rounded text-sm text-gray-200 bg-transparent hover:bg-[#3a3a45] cursor-pointer border border-transparent">9:16</button>
+                            <button type="button" data-ratio="3:4" class="px-3 py-1 rounded text-sm text-gray-200 bg-transparent hover:bg-[#3a3a45] cursor-pointer border border-transparent">3:4</button>
+                            <button type="button" data-ratio="1:1" class="px-3 py-1 rounded text-sm text-gray-200 bg-transparent hover:bg-[#3a3a45] cursor-pointer border border-transparent">1:1</button>
+                            <button type="button" data-ratio="4:3" class="px-3 py-1 rounded text-sm text-gray-200 bg-transparent hover:bg-[#3a3a45] cursor-pointer border border-transparent">4:3</button>
+                            <button type="button" data-ratio="16:9" class="px-3 py-1 rounded text-sm text-gray-200 bg-transparent hover:bg-[#3a3a45] cursor-pointer border border-transparent">16:9</button>
+                        </div>
+                        <div style="display:flex; gap:8px; margin-top:12px;">
+                            <button id="btn-apply-crop" class="px-4 py-2 bg-[#29499d] hover:bg-[#223f7a] text-white rounded-md">应用裁切</button>
+                            <button id="btn-reset-crop" class="px-4 py-2 border border-[#444] text-gray-300 rounded-md">重置为原始</button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -696,7 +737,7 @@
                     </button>
                 </div>
                 
-                <div class="space-y-6 overflow-y-auto pb-4">
+                <div class="space-y-6 overflow-y-auto pb-4 controls-scroll flex-1 pr-2">
                     <!-- Opacity -->
                     <div>
                         <div class="flex justify-between items-center mb-1">
@@ -812,6 +853,8 @@
         <span style="font-size: 16px; letter-spacing: 2px; opacity: 0.9;">正在处理...</span>
     </div>
 
+<!-- Inline crop editor now lives in the settings drawer; modal removed -->
+
 <script>
     /**
      * PinPhotograph Logic v2.1
@@ -831,13 +874,13 @@
         canvasRatio: 9/16,
         borderWidthRatio: 10, 
         outerBorder: true,
-        mode: 'solid',
+        mode: 'self',
         solidColor: '#ffffff',
-        blur: 20,
-        saturation: 100,
-        brightness: -20,
+        blur: 50,
+        saturation: 180,
+        brightness: 15,
         scale: 100, // Legacy, now used as current active scale
-        scaleFree: 100, // New: Scale for Free Mode
+        scaleFree: 200, // New: Scale for Free Mode
         scaleStrip: 100, // New: Scale for Strip Mode
         posX: 0,
         posY: 0,
@@ -850,7 +893,7 @@
     let appState = JSON.parse(localStorage.getItem('pinphotograph_settings')) || { ...defaultState };
     // Ensure default scale is 10 if not set or if it was the old default 100 (optional, but safer to just respect saved or default)
     if (appState.exportScale === undefined) appState.exportScale = 50;
-    if (appState.scaleFree === undefined) appState.scaleFree = 100;
+    if (appState.scaleFree === undefined) appState.scaleFree = 200;
     if (appState.scaleStrip === undefined) appState.scaleStrip = 100;
     if(!appState.shadow) appState.shadow = { enabled: false, blur: 20, distance: 10, angle: 45, size: 0, opacity: 0.5, color: '#000000' }; // Migration
     // Migration for old shadow format
@@ -861,9 +904,24 @@
         delete appState.shadow.x;
         delete appState.shadow.y;
     }
+
+    // Crop UI is inline in the drawer; opening is handled by `openImageEditor(index)`
     if(!appState.layoutMode) appState.layoutMode = 'strip'; // Migration
     if(!appState.canvasRatio) appState.canvasRatio = 9/16; // Migration
     if(!appState.bgBlendMode) appState.bgBlendMode = 'screen'; // Migration
+
+// Free mode logical reference width (increase for higher resolution in Free Mode)
+// Increased again per user request. Be cautious: larger values consume more memory.
+const FREE_MODE_REF_WIDTH = 4320; // was 2160, now 4320
+
+// Interactive preview downscale factor used while user is dragging/resizing to keep UI responsive
+const PREVIEW_INTERACTIVE_SCALE = 0.25; // use 25% of FREE_MODE_REF_WIDTH during interaction
+
+// Runtime flag: when true, renderPreview and background generation will use lower sampling
+let interactiveRender = false;
+// Throttle / debounce helpers
+let _lastRenderTs = 0;
+let _genStitchedTimeout = null;
 
     // Runtime Data
     // item: { img: Image, width, height, edit: {sat,bri,con}, free: {x, y, w, h} }
@@ -881,6 +939,10 @@
     let activeImageIndex = -1; // -1 means none
     let interactionState = null; // { type: 'move'|'resize', startX, startY, startParam, handle }
     let snapGuides = []; // Array of { type: 'v'|'h', pos: number }
+    // Selection state for Free Mode (stores indices in originalImageObjects)
+    let selectionSet = new Set();
+    let lastSelectedIndex = null; // For shift-range selection
+    let multiSelectMode = false; // toggled by "多选" button
 
     // Color Picker Runtime
     let cpState = { hue: 0, sat: 0, val: 100 }; 
@@ -938,6 +1000,7 @@
         optFreeMode: document.getElementById('opt-free-mode'),
         
         btnCustomBg: document.getElementById('custom-img-btn-container'),
+        btnMultiSelect: document.getElementById('btn-multiselect'),
         btnAddImages: document.getElementById('btn-add-images'),
         btnSave: document.getElementById('btn-save'),
         btnHome: document.getElementById('btn-back-home'),
@@ -1285,6 +1348,17 @@
         
         updateBlendModeVisibility();
 
+        // Update the image list title depending on layout mode
+        const titleEl = document.getElementById('image-list-title');
+        if (titleEl) {
+            const label = appState.layoutMode === 'strip' ? '图片列表' : '图层顺序';
+            const count = originalImageObjects.length || 0;
+            titleEl.innerHTML = `${label} (<span id="img-count">${count}</span>)`;
+            // Keep inputs.imgCount reference in sync
+            const newCountEl = document.getElementById('img-count');
+            if (newCountEl) inputs.imgCount = newCountEl;
+        }
+
         // Update aspect ratio buttons active state
         document.querySelectorAll('.ratio-btn').forEach(btn => {
             const ratio = parseFloat(btn.innerText.split(':')[0]) / parseFloat(btn.innerText.split(':')[1]);
@@ -1343,8 +1417,8 @@
     });
 
     function initializeFreePositionsIfNeeded() {
-        // Simple vertical layout for init, fitting in 1080 width
-        const refWidth = 1080;
+        // Simple vertical layout for init, fitting in FREE_MODE_REF_WIDTH
+        const refWidth = FREE_MODE_REF_WIDTH;
         let currentY = 50;
         
         // Check if we need to init (e.g. if x,y are all 0)
@@ -1413,6 +1487,31 @@
         inputs.btnAddImages.addEventListener('click', () => {
             inputs.addFile.click();
         });
+
+        // Multi-select toggle button
+        if (inputs.btnMultiSelect) {
+            inputs.btnMultiSelect.addEventListener('click', (e) => {
+                multiSelectMode = !multiSelectMode;
+                if (multiSelectMode) {
+                    inputs.btnMultiSelect.classList.remove('bg-[#444]');
+                    inputs.btnMultiSelect.classList.add('bg-[#29499d]');
+                } else {
+                    inputs.btnMultiSelect.classList.remove('bg-[#29499d]');
+                    inputs.btnMultiSelect.classList.add('bg-[#444]');
+                    // When leaving multi-select mode, collapse selection to single active
+                    if (selectionSet.size > 0) {
+                        const first = Array.from(selectionSet)[0];
+                        selectionSet.clear();
+                        if (typeof first === 'number') {
+                            selectionSet.add(first); // keep a single selected item visually
+                            activeImageIndex = first;
+                        }
+                    }
+                }
+                renderImageList();
+                requestRender();
+            });
+        }
 
         inputs.file.addEventListener('change', (e) => handleFiles(e, true)); 
         inputs.addFile.addEventListener('change', (e) => handleFiles(e, false)); 
@@ -1588,8 +1687,10 @@
 
         inputs.btnSave.addEventListener('click', handleSave);
 
-        inputs.btnHome.addEventListener('click', () => {
-            window.location.reload(); 
+        inputs.btnHome.addEventListener('click', (e) => {
+            e.preventDefault();
+            // 直接打开选图对话框（不返回主页）
+            if (inputs.file) inputs.file.click();
         });
 
         inputs.btnCloseDrawer.addEventListener('click', closeImageEditor);
@@ -1802,12 +1903,557 @@
         inputs.dBriNum.value = imgObj.edit.bri;
         inputs.dConSlider.value = imgObj.edit.con;
         inputs.dConNum.value = imgObj.edit.con;
+        // Replay slide-up animation when opening editor
+        try {
+            inputs.drawer.classList.remove('animate-slide-up-panel');
+            // Force reflow to reset the animation
+            void inputs.drawer.offsetWidth;
+            inputs.drawer.classList.add('animate-slide-up-panel');
+        } catch (err) { /* ignore if element missing */ }
         inputs.drawer.classList.add('active');
+        // Initialize crop editor for this image
+        initCropEditorForIndex(index);
     }
 
     function closeImageEditor() {
+        // Remove animation class first to avoid animation keeping the drawer visible
+        try {
+            inputs.drawer.classList.remove('animate-slide-up-panel');
+            // Force reflow so any animation-applied transform is cleared
+            void inputs.drawer.offsetWidth;
+        } catch (err) { /* ignore */ }
         inputs.drawer.classList.remove('active');
         currentlyEditingIndex = -1;
+        // Clean up crop editor pointer handlers when drawer closes
+        if (_crop && _crop.canvas) {
+            _crop.canvas.onpointerdown = null;
+            window.removeEventListener('pointermove', cropPointerMove);
+            window.removeEventListener('pointerup', cropPointerUp);
+            // Remove delegated ratio handler if present
+            try {
+                const drawerSection = document.getElementById('drawer-crop-section');
+                if (drawerSection && _crop && _crop._ratioHandler) {
+                    drawerSection.removeEventListener('click', _crop._ratioHandler);
+                    delete _crop._ratioHandler;
+                }
+            } catch (err) {
+                console.debug('Error removing ratio handler', err);
+            }
+            _crop.canvas = null;
+            _crop.ctx = null;
+        }
+    }
+
+    // --- Crop Editor Implementation ---
+    let _crop = {
+        canvas: null,
+        ctx: null,
+        img: null,
+        // crop rect in image pixels { x, y, w, h }
+        rect: null,
+        dragging: false,
+        resizing: false,
+        dragOffset: {x:0,y:0},
+        resizeCorner: null,
+        // cover/contain transforms (computed per-editor open)
+        coverScale: 1,
+        coverOffsetX: 0,
+        coverOffsetY: 0,
+        containScale: 1,
+        containOffsetX: 0,
+        containOffsetY: 0
+        ,debug: false
+    };
+
+    function initCropEditorForIndex(index) {
+        const canvas = document.getElementById('drawer-crop-canvas');
+        if (!canvas) return;
+        _crop.canvas = canvas;
+        _crop.ctx = canvas.getContext('2d');
+        const imgObj = originalImageObjects[index];
+        if (!imgObj) return;
+        // Use the current image as source for the editor (so reopening shows applied crop)
+        // Always open editor against the original full image when available.
+        const baseImg = imgObj._origImg || imgObj.img;
+        _crop.img = baseImg;
+
+        // Ensure item has a crop rect stored in ORIGINAL image pixels.
+        if (!imgObj.crop || typeof imgObj.crop.x !== 'number') {
+            imgObj.crop = { x:0, y:0, w: baseImg.width, h: baseImg.height };
+        } else {
+            // Clamp existing crop to base image bounds
+            imgObj.crop.x = Math.max(0, Math.min(imgObj.crop.x, baseImg.width - 1));
+            imgObj.crop.y = Math.max(0, Math.min(imgObj.crop.y, baseImg.height - 1));
+            imgObj.crop.w = Math.max(1, Math.min(imgObj.crop.w, baseImg.width - imgObj.crop.x));
+            imgObj.crop.h = Math.max(1, Math.min(imgObj.crop.h, baseImg.height - imgObj.crop.y));
+        }
+        // Use the saved crop rect as working rect
+        _crop.rect = { ...imgObj.crop };
+
+        // Resize canvas to device pixels for crisp lines and compute contain mapping
+        const styleW = canvas.clientWidth || 400;
+        const styleH = canvas.clientHeight || 240;
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = Math.max(1, Math.floor(styleW * dpr));
+        canvas.height = Math.max(1, Math.floor(styleH * dpr));
+        canvas.style.height = styleH + 'px';
+
+        // We will use CONTAIN mapping only: full image visible, centered.
+        const img = _crop.img;
+        const canvasAspect = canvas.width / canvas.height;
+        const imgAspect = img.width / img.height;
+        let containW, containH;
+        if (imgAspect > canvasAspect) {
+            containW = canvas.width;
+            containH = Math.round(containW / imgAspect);
+        } else {
+            containH = canvas.height;
+            containW = Math.round(containH * imgAspect);
+        }
+        _crop.containScale = containW / img.width; // canvas px per image px
+        _crop.containOffsetX = (canvas.width - containW) / 2;
+        _crop.containOffsetY = (canvas.height - containH) / 2;
+
+        // Initialize aspect ratio (null = free)
+        _crop.aspect = null;
+
+        drawCropCanvas();
+
+        // Attach pointer handlers
+        canvas.onpointerdown = cropPointerDown;
+        window.addEventListener('pointermove', cropPointerMove);
+        window.addEventListener('pointerup', cropPointerUp);
+
+        // Buttons
+        const btnApply = document.getElementById('btn-apply-crop');
+        const btnReset = document.getElementById('btn-reset-crop');
+        const btnClose = document.getElementById('btn-close-crop');
+        const btnCloseBottom = document.getElementById('btn-close-crop-bottom');
+        // Apply should NOT close modal (user requested)
+        btnApply.onclick = (e) => { e.stopPropagation(); applyCropToIndex(index); };
+        btnReset.onclick = (e) => { e.stopPropagation(); resetCropToFull(index); };
+        if (btnClose) btnClose.onclick = (e) => { e.stopPropagation(); closeImageEditor(); };
+        if (btnCloseBottom) btnCloseBottom.onclick = (e) => { e.stopPropagation(); closeImageEditor(); };
+
+        // Ratio buttons
+        const ratioContainer = document.getElementById('crop-ratio-buttons');
+        if (ratioContainer) {
+            // Ensure buttons are interactive and visible above the canvas
+            ratioContainer.querySelectorAll('button').forEach(btn => {
+                btn.disabled = false;
+                btn.style.pointerEvents = 'auto';
+                btn.style.cursor = 'pointer';
+                btn.style.position = 'relative';
+                btn.style.zIndex = '30';
+            });
+
+            // Use event delegation on the drawer section for reliability
+            const drawerSection = document.getElementById('drawer-crop-section');
+            if (drawerSection) {
+                const ratioHandler = (e) => {
+                    const btn = e.target.closest('[data-ratio]');
+                    if (!btn || !drawerSection.contains(btn)) return;
+                    e.stopPropagation();
+                    const r = btn.dataset.ratio;
+                    setCropAspect(r, index);
+                    // visual active state - ensure only one active
+                    ratioContainer.querySelectorAll('button').forEach(b => b.classList.remove('active', 'bg-[#29499d]', 'text-white'));
+                    btn.classList.add('active');
+                    btn.classList.add('bg-[#29499d]');
+                    btn.classList.add('text-white');
+                };
+                // remove any existing handler first
+                if (_crop._ratioHandler) drawerSection.removeEventListener('click', _crop._ratioHandler);
+                drawerSection.addEventListener('click', ratioHandler);
+                _crop._ratioHandler = ratioHandler;
+            }
+            // Determine initial state based on saved crop
+            ratioContainer.querySelectorAll('button').forEach(b => b.classList.remove('active', 'bg-[#29499d]', 'text-white'));
+            
+            // Check if current crop matches full image (approx)
+            const isFullImage = Math.abs(_crop.rect.x) < 2 && Math.abs(_crop.rect.y) < 2 && 
+                                Math.abs(_crop.rect.w - baseImg.width) < 2 && Math.abs(_crop.rect.h - baseImg.height) < 2;
+            
+            if (isFullImage) {
+                const def = ratioContainer.querySelector('button[data-ratio="orig"]');
+                if (def) { 
+                    def.classList.add('active', 'bg-[#29499d]', 'text-white'); 
+                    _crop.aspect = baseImg.width / baseImg.height;
+                }
+            } else {
+                const freeBtn = ratioContainer.querySelector('button[data-ratio="free"]');
+                if (freeBtn) {
+                    freeBtn.classList.add('active', 'bg-[#29499d]', 'text-white');
+                }
+                _crop.aspect = null; // Free mode
+            }
+            // Ensure canvas is up to date
+            drawCropCanvas();
+        }
+        // Note: debug button removed — modal handles crop UI now
+    }
+
+    function imageRectToCanvasRect(rect) {
+        // Map image pixel rect -> canvas pixel rect using CONTAIN mapping
+        return {
+            x: _crop.containOffsetX + rect.x * _crop.containScale,
+            y: _crop.containOffsetY + rect.y * _crop.containScale,
+            w: Math.max(1, rect.w * _crop.containScale),
+            h: Math.max(1, rect.h * _crop.containScale)
+        };
+    }
+
+    function setCropAspect(ratioKey, index) {
+        if (ratioKey === 'free') {
+            _crop.aspect = null;
+        } else if (ratioKey === 'orig') {
+            const imgObj = originalImageObjects[index];
+            const src = imgObj && (imgObj._origImg || imgObj.img);
+            if (src) _crop.aspect = src.width / src.height;
+            else _crop.aspect = null;
+        } else {
+                // parse common formats like "9/16", "9:16", or "3x4"
+                let parts = null;
+                if (ratioKey.indexOf('/') !== -1) parts = ratioKey.split('/');
+                else if (ratioKey.indexOf(':') !== -1) parts = ratioKey.split(':');
+                else if (ratioKey.toLowerCase().indexOf('x') !== -1) parts = ratioKey.toLowerCase().split('x');
+                if (parts && parts.length === 2) {
+                    const w = parseFloat(parts[0]);
+                    const h = parseFloat(parts[1]);
+                    if (w > 0 && h > 0) _crop.aspect = w / h;
+                }
+        }
+        // adjust current rect to honor aspect if needed
+        if (_crop.aspect) {
+            const imgW = _crop.img.width, imgH = _crop.img.height;
+            // produce max rect that fits inside image with given aspect
+            let rw = imgW, rh = rw / _crop.aspect;
+            if (rh > imgH) { rh = imgH; rw = rh * _crop.aspect; }
+            const nx = (imgW - rw)/2;
+            const ny = (imgH - rh)/2;
+            _crop.rect = { x: nx, y: ny, w: rw, h: rh };
+        } else {
+            // keep existing rect
+            if (!_crop.rect) _crop.rect = { x:0, y:0, w: _crop.img.width, h: _crop.img.height };
+        }
+        drawCropCanvas();
+    }
+
+    function canvasPointToImagePoint(px, py) {
+        // Convert canvas pixel coords -> image pixel coords using CONTAIN mapping
+        const x = (px - _crop.containOffsetX) / _crop.containScale;
+        const y = (py - _crop.containOffsetY) / _crop.containScale;
+        return { x, y };
+    }
+
+    function drawCropCanvas() {
+        const c = _crop.canvas; const ctx = _crop.ctx;
+        if (!c || !ctx || !_crop.img) return;
+        ctx.clearRect(0,0,c.width,c.height);
+        ctx.imageSmoothingQuality = 'high';
+
+        // draw the image using CONTAIN mapping
+        const drawW = _crop.img.width * _crop.containScale;
+        const drawH = _crop.img.height * _crop.containScale;
+        ctx.drawImage(_crop.img, 0, 0, _crop.img.width, _crop.img.height,
+            _crop.containOffsetX, _crop.containOffsetY, drawW, drawH);
+
+        // dim only the area where the image is drawn (avoid dark edges outside image)
+        ctx.fillStyle = 'rgba(0,0,0,0.45)';
+        // Draw dim overlay limited to image bounding box (contain mapping)
+        const imgX = Math.round(_crop.containOffsetX);
+        const imgY = Math.round(_crop.containOffsetY);
+        const imgW = Math.round(drawW);
+        const imgH = Math.round(drawH);
+        if (imgW > 0 && imgH > 0) ctx.fillRect(imgX, imgY, imgW, imgH);
+
+        const crect = imageRectToCanvasRect(_crop.rect);
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(crect.x, crect.y, crect.w, crect.h);
+        ctx.clip();
+        ctx.drawImage(_crop.img, 0, 0, _crop.img.width, _crop.img.height,
+            Math.round(_crop.containOffsetX), Math.round(_crop.containOffsetY), drawW, drawH);
+        ctx.restore();
+
+        ctx.strokeStyle = '#29499d';
+        ctx.lineWidth = Math.max(2, 2 * (window.devicePixelRatio || 1));
+        ctx.strokeRect(crect.x + 0.5, crect.y + 0.5, crect.w - 1, crect.h - 1);
+
+        const handleSize = Math.max(12, Math.round(12 * (window.devicePixelRatio || 1)));
+        ctx.fillStyle = '#29499d';
+        const hs = handleSize;
+        ctx.fillRect(crect.x - hs/2, crect.y - hs/2, hs, hs);
+        ctx.fillRect(crect.x + crect.w - hs/2, crect.y - hs/2, hs, hs);
+        ctx.fillRect(crect.x - hs/2, crect.y + crect.h - hs/2, hs, hs);
+        ctx.fillRect(crect.x + crect.w - hs/2, crect.y + crect.h - hs/2, hs, hs);
+
+        if (_crop.debug) {
+            const containRect = {
+                x: Math.round(_crop.containOffsetX),
+                y: Math.round(_crop.containOffsetY),
+                w: drawW,
+                h: drawH
+            };
+            ctx.save();
+            ctx.strokeStyle = 'rgba(80,255,120,0.9)';
+            ctx.setLineDash([3,3]);
+            ctx.lineWidth = Math.max(1, 1 * (window.devicePixelRatio || 1));
+            ctx.strokeRect(containRect.x + 0.5, containRect.y + 0.5, containRect.w - 1, containRect.h - 1);
+            ctx.setLineDash([]);
+            ctx.restore();
+        }
+    }
+
+    function cropPointerDown(evt) {
+        if (!_crop.canvas) return;
+        const rect = _crop.canvas.getBoundingClientRect();
+        const px = (evt.clientX - rect.left) * (window.devicePixelRatio || 1);
+        const py = (evt.clientY - rect.top) * (window.devicePixelRatio || 1);
+        const crect = imageRectToCanvasRect(_crop.rect);
+        // detect handle (within 24px for better touch)
+        const handleDetect = 24 * (window.devicePixelRatio || 1);
+        // corners
+        const corners = {
+            tl: {x: crect.x, y: crect.y},
+            tr: {x: crect.x + crect.w, y: crect.y},
+            bl: {x: crect.x, y: crect.y + crect.h},
+            br: {x: crect.x + crect.w, y: crect.y + crect.h}
+        };
+        for (const k of Object.keys(corners)) {
+            const d = Math.hypot(px - corners[k].x, py - corners[k].y);
+            if (d <= handleDetect) {
+                _crop.resizing = true;
+                _crop.resizeCorner = k;
+                return;
+            }
+        }
+        // inside rect -> start dragging
+        if (px >= crect.x && px <= crect.x + crect.w && py >= crect.y && py <= crect.y + crect.h) {
+            _crop.dragging = true;
+            _crop.dragOffset.x = (px - crect.x) / _crop.containScale;
+            _crop.dragOffset.y = (py - crect.y) / _crop.containScale;
+        }
+    }
+
+    function cropPointerMove(evt) {
+        if ((!_crop.dragging && !_crop.resizing) || !_crop.canvas) return;
+        const rect = _crop.canvas.getBoundingClientRect();
+        const px = (evt.clientX - rect.left) * (window.devicePixelRatio || 1);
+        const py = (evt.clientY - rect.top) * (window.devicePixelRatio || 1);
+        const imgP = canvasPointToImagePoint(px, py);
+
+        if (_crop.dragging) {
+            // move rect keeping size (use contain mapping consistently)
+            const newX = imgP.x - _crop.dragOffset.x;
+            const newY = imgP.y - _crop.dragOffset.y;
+            // clamp
+            _crop.rect.x = Math.max(0, Math.min(_crop.img.width - _crop.rect.w, newX));
+            _crop.rect.y = Math.max(0, Math.min(_crop.img.height - _crop.rect.h, newY));
+            drawCropCanvas();
+            return;
+        }
+        if (_crop.resizing) {
+            // resize according to corner
+            const corner = _crop.resizeCorner;
+            const imgPoint = canvasPointToImagePoint(px, py);
+            if (_crop.aspect) {
+                // Keep aspect ratio while resizing
+                const a = _crop.aspect;
+                if (corner === 'tl') {
+                    // br fixed
+                    const brx = _crop.rect.x + _crop.rect.w;
+                    const bry = _crop.rect.y + _crop.rect.h;
+                    // compute w based on pointer x clamped
+                    let nx = Math.max(0, Math.min(_crop.rect.x + _crop.rect.w - 10, imgPoint.x));
+                    let nw = brx - nx;
+                    let nh = Math.round(nw / a);
+                    if (nh > bry) { nh = bry; nw = Math.round(nh * a); nx = brx - nw; }
+                    let ny = bry - nh;
+                    _crop.rect.x = nx; _crop.rect.y = ny; _crop.rect.w = nw; _crop.rect.h = nh;
+                } else if (corner === 'tr') {
+                    const blx = _crop.rect.x;
+                    const bly = _crop.rect.y + _crop.rect.h;
+                    let nx = Math.max(_crop.rect.x + 10, Math.min(_crop.img.width, imgPoint.x));
+                    let nw = nx - blx;
+                    let nh = Math.round(nw / a);
+                    if (nh > bly) { nh = bly; nw = Math.round(nh * a); nx = blx + nw; }
+                    let ny = bly - nh;
+                    _crop.rect.w = nw; _crop.rect.y = ny; _crop.rect.h = nh;
+                } else if (corner === 'bl') {
+                    const trx = _crop.rect.x + _crop.rect.w;
+                    const tryy = _crop.rect.y;
+                    let ny = Math.max(_crop.rect.y + 10, Math.min(_crop.img.height, imgPoint.y));
+                    let nh = ny - _crop.rect.y;
+                    let nw = Math.round(nh * a);
+                    if (nw > _crop.rect.x + _crop.rect.w) { nw = _crop.rect.x + _crop.rect.w; nh = Math.round(nw / a); ny = _crop.rect.y + nh; }
+                    let nx = trx - nw;
+                    _crop.rect.x = nx; _crop.rect.w = nw; _crop.rect.h = nh;
+                } else if (corner === 'br') {
+                    let nx = Math.max(_crop.rect.x + 10, Math.min(_crop.img.width, imgPoint.x));
+                    let ny = Math.max(_crop.rect.y + 10, Math.min(_crop.img.height, imgPoint.y));
+                    let nw = nx - _crop.rect.x;
+                    let nh = Math.round(nw / a);
+                    if (nh !== ny - _crop.rect.y) {
+                        // adjust ny to match aspect
+                        ny = _crop.rect.y + nh;
+                        if (ny > _crop.img.height) { ny = _crop.img.height; nh = ny - _crop.rect.y; nw = Math.round(nh * a); }
+                    }
+                    _crop.rect.w = nw; _crop.rect.h = nh;
+                }
+            } else {
+                if (corner === 'tl') {
+                    const nx = Math.min(_crop.rect.x + _crop.rect.w - 10, Math.max(0, imgPoint.x));
+                    const ny = Math.min(_crop.rect.y + _crop.rect.h - 10, Math.max(0, imgPoint.y));
+                    const nw = _crop.rect.x + _crop.rect.w - nx;
+                    const nh = _crop.rect.y + _crop.rect.h - ny;
+                    _crop.rect.x = nx; _crop.rect.y = ny; _crop.rect.w = nw; _crop.rect.h = nh;
+                } else if (corner === 'tr') {
+                    const nx = Math.max(_crop.rect.x + 10, Math.min(_crop.img.width, imgPoint.x));
+                    const ny = Math.min(_crop.rect.y + _crop.rect.h - 10, Math.max(0, imgPoint.y));
+                    const nw = nx - _crop.rect.x;
+                    const nh = _crop.rect.y + _crop.rect.h - ny;
+                    _crop.rect.w = nw; _crop.rect.y = ny; _crop.rect.h = nh;
+                } else if (corner === 'bl') {
+                    const nx = Math.min(_crop.rect.x + _crop.rect.w - 10, Math.max(0, imgPoint.x));
+                    const ny = Math.max(_crop.rect.y + 10, Math.min(_crop.img.height, imgPoint.y));
+                    const nw = _crop.rect.x + _crop.rect.w - nx;
+                    const nh = ny - _crop.rect.y;
+                    _crop.rect.x = nx; _crop.rect.w = nw; _crop.rect.h = nh;
+                } else if (corner === 'br') {
+                    const nx = Math.max(_crop.rect.x + 10, Math.min(_crop.img.width, imgPoint.x));
+                    const ny = Math.max(_crop.rect.y + 10, Math.min(_crop.img.height, imgPoint.y));
+                    _crop.rect.w = nx - _crop.rect.x; _crop.rect.h = ny - _crop.rect.y;
+                }
+            }
+            // clamp minimum
+            _crop.rect.w = Math.max(10, Math.min(_crop.rect.w, _crop.img.width - _crop.rect.x));
+            _crop.rect.h = Math.max(10, Math.min(_crop.rect.h, _crop.img.height - _crop.rect.y));
+            drawCropCanvas();
+        }
+    }
+
+    function cropPointerUp(evt) {
+        if (_crop.dragging || _crop.resizing) {
+            _crop.dragging = false; _crop.resizing = false; _crop.resizeCorner = null;
+            // no op
+        }
+    }
+
+    function applyCropToIndex(index) {
+        const imgObj = originalImageObjects[index];
+        if (!imgObj) return;
+        // Apply crop by replacing the image with a cropped canvas, but keep original in _origImg
+        // Use sub-pixel crop rect (floats) to avoid 1px shifts; clamp to image bounds
+        const rect = {
+            x: Math.max(0, _crop.rect.x),
+            y: Math.max(0, _crop.rect.y),
+            w: Math.max(1, _crop.rect.w),
+            h: Math.max(1, _crop.rect.h)
+        };
+        // Determine base (original) image to sample from - prefer preserved original if available
+        const baseImg = imgObj._origImg || imgObj.img;
+        // Save a backup of the original full image if not already saved
+        if (!imgObj._origImg) imgObj._origImg = baseImg;
+
+        // Preserve previous displayed/free dimensions (if present)
+        let oldFree = imgObj.free && typeof imgObj.free.w === 'number' ? { x: imgObj.free.x, y: imgObj.free.y, w: imgObj.free.w, h: imgObj.free.h } : null;
+        // Preserve previous crop in original pixels (what imgObj.img currently represents)
+        const oldCrop = imgObj.crop && typeof imgObj.crop.w === 'number' ? { ...imgObj.crop } : { x:0, y:0, w: baseImg.width, h: baseImg.height };
+
+        // Create cropped canvas from the base image (coords are in base image pixels)
+        const c = document.createElement('canvas');
+        // Canvas sizes must be integers; round for pixel buffer size but keep rect floats for sampling
+        c.width = Math.max(1, Math.round(rect.w)); c.height = Math.max(1, Math.round(rect.h));
+        const cc = c.getContext('2d');
+        cc.drawImage(baseImg, rect.x, rect.y, rect.w, rect.h, 0, 0, c.width, c.height);
+
+        // Replace current image with the cropped canvas and update metadata
+        imgObj.img = c;
+        imgObj.width = rect.w;
+        imgObj.height = rect.h;
+        imgObj.crop = { x: rect.x, y: rect.y, w: rect.w, h: rect.h };
+
+        // Compute displayed size and position so original image pixel -> canvas mappings remain the same
+        if (oldFree) {
+            const scale = oldFree.w / oldCrop.w; // canvas px per original-image-px scale
+            const newW = Math.max(1, rect.w * scale);
+            const newH = Math.max(1, rect.h * scale);
+            const newX = oldFree.x + (rect.x - oldCrop.x) * scale;
+            const newY = oldFree.y + (rect.y - oldCrop.y) * scale;
+            imgObj.free = imgObj.free || {};
+            imgObj.free.w = newW;
+            imgObj.free.h = newH;
+            imgObj.free.x = newX;
+            imgObj.free.y = newY;
+        } else {
+            imgObj.free = imgObj.free || {};
+            imgObj.free.w = rect.w;
+            imgObj.free.h = rect.h;
+            imgObj.free.x = 0;
+            imgObj.free.y = 0;
+        }
+        // regenerate thumbnail if present or expected
+        try {
+            const th = document.createElement('canvas');
+            th.width = 80; th.height = 80;
+            const tctx = th.getContext('2d');
+            // fill black background for small images
+            tctx.fillStyle = '#000'; tctx.fillRect(0,0,80,80);
+            // draw scaled center-fit
+            const sw = c.width, sh = c.height;
+            const asp = sw / sh;
+            let dw = 80, dh = 80;
+            if (asp > 1) { dh = Math.round(80 / asp); } else { dw = Math.round(80 * asp); }
+            const dx = Math.round((80 - dw)/2), dy = Math.round((80 - dh)/2);
+            tctx.drawImage(c, 0, 0, sw, sh, dx, dy, dw, dh);
+            imgObj.thumbnail = th;
+        } catch (err) { /* ignore thumbnail errors */ }
+        // Refresh UI and preview
+        recalculateDimensions();
+        renderImageList();
+        generateStitchedBase();
+        requestRender();
+    }
+
+    function resetCropToFull(index) {
+        const imgObj = originalImageObjects[index];
+        if (!imgObj) return;
+        // Preserve visual center and scale when restoring original image
+        let oldFree = imgObj.free && typeof imgObj.free.w === 'number' ? { x: imgObj.free.x, y: imgObj.free.y, w: imgObj.free.w, h: imgObj.free.h } : null;
+        // oldCrop is the region of the ORIGINAL image that the current imgObj.img represents
+        const oldCrop = imgObj.crop && typeof imgObj.crop.w === 'number' ? { ...imgObj.crop } : null;
+
+        if (imgObj._origImg) {
+            // Restore original image (keep _origImg as backup so user can re-apply crop later)
+            imgObj.img = imgObj._origImg;
+            imgObj.width = imgObj.img.width;
+            imgObj.height = imgObj.img.height;
+        }
+
+        // Reset crop metadata to full original
+        imgObj.crop = { x:0, y:0, w: imgObj.img.width, h: imgObj.img.height };
+        _crop.rect = { ...imgObj.crop };
+
+        // If we had previous free display size, adjust it so original-image-pixel -> canvas mapping stays consistent
+        if (oldFree && oldCrop) {
+            const scale = oldFree.w / oldCrop.w;
+            const newW = Math.max(1, imgObj.img.width * scale);
+            const newH = Math.max(1, imgObj.img.height * scale);
+            const newX = oldFree.x - (oldCrop.x * scale);
+            const newY = oldFree.y - (oldCrop.y * scale);
+            imgObj.free = imgObj.free || {};
+            imgObj.free.w = newW;
+            imgObj.free.h = newH;
+            imgObj.free.x = newX;
+            imgObj.free.y = newY;
+        }
+
+        drawCropCanvas();
+        recalculateDimensions();
+        renderImageList();
+        generateStitchedBase();
+        requestRender();
     }
 
     function updateBlendModeVisibility() {
@@ -1909,9 +2555,11 @@
                 }
             });
             
-            // Highlight if active in free mode
-            if (appState.layoutMode === 'free' && index === activeImageIndex) {
-                div.classList.add('border-[#29499d]', 'border-2');
+            // Highlight active and selected items in the list (show in both modes)
+            // Ensure both "active" (last-clicked) and multi-selected items use the same
+            // visual treatment so the blue border thickness stays consistent.
+            if (selectionSet.has(index) || index === activeImageIndex) {
+                div.classList.add('free-selected', 'border-[#29499d]', 'border-2');
                 div.classList.remove('border-[#444]');
             }
 
@@ -1986,20 +2634,118 @@
             };
 
             actionsDiv.appendChild(btnReplace);
+
+            // Crop button removed from list (moved to 设置)
+
             actionsDiv.appendChild(btnEdit);
             actionsDiv.appendChild(btnDel);
 
             div.appendChild(thumbCanvas);
             div.appendChild(infoDiv);
             div.appendChild(actionsDiv);
-            div.onclick = () => {
-                // Clicking list item in Free Mode selects the image
+            // Click / Shift / Ctrl selection handling (desktop)
+            div.addEventListener('click', (e) => {
+                // Allow selection in Free mode as before.
                 if (appState.layoutMode === 'free') {
-                    activeImageIndex = index;
-                    renderImageList(); // Update border highlight
-                    requestRender();
+                    if (!multiSelectMode) {
+                        // Normal single-select behavior: toggle when clicking same item
+                        if (selectionSet.has(index)) {
+                            selectionSet.delete(index);
+                            lastSelectedIndex = null;
+                        } else {
+                            selectionSet.clear();
+                            selectionSet.add(index);
+                            lastSelectedIndex = index;
+                        }
+                    } else {
+                        // Multi-select mode behavior (free)
+                        if (e.shiftKey && lastSelectedIndex !== null) {
+                            const a = Math.min(lastSelectedIndex, index);
+                            const b = Math.max(lastSelectedIndex, index);
+                            for (let i = a; i <= b; i++) selectionSet.add(i);
+                        } else if (e.ctrlKey || e.metaKey) {
+                            if (selectionSet.has(index)) selectionSet.delete(index);
+                            else selectionSet.add(index);
+                            lastSelectedIndex = index;
+                        } else {
+                            if (selectionSet.has(index)) selectionSet.delete(index);
+                            else selectionSet.add(index);
+                            lastSelectedIndex = index;
+                        }
+                    }
+                    // Ensure activeImageIndex reflects whether this item remains selected
+                    activeImageIndex = selectionSet.has(index) ? index : -1;
                 }
-            };
+                // In Strip mode, only allow selection when multiSelectMode is ON and selection is for list reordering
+                else {
+                    if (!multiSelectMode) {
+                        // Single-select in strip mode when multi-select is off: toggle when clicking same
+                        if (selectionSet.has(index)) {
+                            selectionSet.delete(index);
+                            lastSelectedIndex = null;
+                        } else {
+                            selectionSet.clear();
+                            selectionSet.add(index);
+                            lastSelectedIndex = index;
+                        }
+                    } else {
+                        // Multi-select mode behavior (strip): toggle or range select similar to free
+                        if (e.shiftKey && lastSelectedIndex !== null) {
+                            const a = Math.min(lastSelectedIndex, index);
+                            const b = Math.max(lastSelectedIndex, index);
+                            for (let i = a; i <= b; i++) selectionSet.add(i);
+                        } else if (e.ctrlKey || e.metaKey) {
+                            if (selectionSet.has(index)) selectionSet.delete(index);
+                            else selectionSet.add(index);
+                            lastSelectedIndex = index;
+                        } else {
+                            // In strip multi-select mode, plain click toggles selection
+                            if (selectionSet.has(index)) selectionSet.delete(index);
+                            else selectionSet.add(index);
+                            lastSelectedIndex = index;
+                        }
+                    }
+                    // Ensure activeImageIndex reflects whether this item remains selected (strip)
+                    activeImageIndex = selectionSet.has(index) ? index : -1;
+                }
+
+                renderImageList();
+                requestRender();
+            });
+
+            // Touch: long-press to toggle selection (touch-friendly)
+            (function(el, idx) {
+                let lpTimer = null;
+                const start = (ev) => {
+                    if (ev.touches && ev.touches.length > 1) return;
+                    lpTimer = setTimeout(() => {
+                        // Toggle selection on long-press
+                        if (selectionSet.has(idx)) {
+                            selectionSet.delete(idx);
+                        } else {
+                            selectionSet.add(idx);
+                        }
+                        lastSelectedIndex = idx;
+                        // Keep active image in sync with selection
+                        activeImageIndex = selectionSet.has(idx) ? idx : -1;
+
+                        // If this element was being dragged, cancel that drag
+                        if (touchCurrentEl === el) {
+                            el.classList.remove('dragging');
+                            touchCurrentEl = null;
+                            document.body.style.overflow = '';
+                        }
+
+                        renderImageList();
+                        requestRender();
+                    }, 450);
+                };
+                const cancel = () => { if (lpTimer) { clearTimeout(lpTimer); lpTimer = null; } };
+                el.addEventListener('touchstart', start, {passive: true});
+                el.addEventListener('touchmove', cancel, {passive: true});
+                el.addEventListener('touchend', cancel);
+                el.addEventListener('touchcancel', cancel);
+            })(div, index);
             container.appendChild(div);
 
             addDragListeners(div);
@@ -2097,17 +2843,35 @@
         const oldIdx = parseInt(dragSrcEl.dataset.index);
         const container = inputs.imageListContainer;
         const cursorYContent = (e.clientY - container.getBoundingClientRect().top) + container.scrollTop;
-        let insertIndex = computeInsertIndexFromY(container, cursorYContent);
-        
+        const insertIndexRaw = computeInsertIndexFromY(container, cursorYContent);
+
         if (appState.layoutMode === 'free') {
             const count = originalImageObjects.length;
             const visualOldIdx = count - 1 - oldIdx;
-            if (insertIndex > visualOldIdx) insertIndex--;
-            const targetArrayIdx = count - 1 - insertIndex;
-            if (targetArrayIdx !== oldIdx) moveImage(oldIdx, targetArrayIdx);
+            // If multi-select and dragging a selected group, pass the raw visual insert index
+            // to moveSelectedTo which will map it into the post-removal position correctly.
+            if (multiSelectMode && selectionSet.has(oldIdx)) {
+                // Only call moveSelectedTo if something will change
+                if (insertIndexRaw !== visualOldIdx) moveSelectedTo(insertIndexRaw);
+            } else {
+                let insertIndex = insertIndexRaw;
+                if (insertIndex > visualOldIdx) insertIndex--;
+                const targetArrayIdx = count - 1 - insertIndex;
+                if (targetArrayIdx !== oldIdx) {
+                    moveImage(oldIdx, targetArrayIdx);
+                }
+            }
         } else {
-            if (insertIndex > oldIdx) insertIndex--;
-            if (insertIndex !== oldIdx) moveImage(oldIdx, insertIndex);
+            // Strip mode: similar logic, avoid adjusting before moveSelectedTo for multi-select
+            if (multiSelectMode && selectionSet.has(oldIdx)) {
+                if (insertIndexRaw !== oldIdx) moveSelectedTo(insertIndexRaw);
+            } else {
+                let insertIndex = insertIndexRaw;
+                if (insertIndex > oldIdx) insertIndex--;
+                if (insertIndex !== oldIdx) {
+                    moveImage(oldIdx, insertIndex);
+                }
+            }
         }
         return false;
     }
@@ -2156,17 +2920,31 @@
         const container = inputs.imageListContainer;
         const cursorYContent = (touchLocation.clientY - container.getBoundingClientRect().top) + container.scrollTop;
         const oldIdx = parseInt(touchCurrentEl.dataset.index);
-        let insertIndex = computeInsertIndexFromY(container, cursorYContent);
-        
+        const insertIndexRaw = computeInsertIndexFromY(container, cursorYContent);
+
         if (appState.layoutMode === 'free') {
             const count = originalImageObjects.length;
             const visualOldIdx = count - 1 - oldIdx;
-            if (insertIndex > visualOldIdx) insertIndex--;
-            const targetArrayIdx = count - 1 - insertIndex;
-            if (targetArrayIdx !== oldIdx) moveImage(oldIdx, targetArrayIdx);
+            if (multiSelectMode && selectionSet.has(oldIdx)) {
+                if (insertIndexRaw !== visualOldIdx) moveSelectedTo(insertIndexRaw);
+            } else {
+                let insertIndex = insertIndexRaw;
+                if (insertIndex > visualOldIdx) insertIndex--;
+                const targetArrayIdx = count - 1 - insertIndex;
+                if (targetArrayIdx !== oldIdx) {
+                    moveImage(oldIdx, targetArrayIdx);
+                }
+            }
         } else {
-            if (insertIndex > oldIdx) insertIndex--;
-            if (insertIndex !== oldIdx) moveImage(oldIdx, insertIndex);
+            if (multiSelectMode && selectionSet.has(oldIdx)) {
+                if (insertIndexRaw !== oldIdx) moveSelectedTo(insertIndexRaw);
+            } else {
+                let insertIndex = insertIndexRaw;
+                if (insertIndex > oldIdx) insertIndex--;
+                if (insertIndex !== oldIdx) {
+                    moveImage(oldIdx, insertIndex);
+                }
+            }
         }
 
         hideInsertIndicator();
@@ -2177,8 +2955,83 @@
     }
 
     function moveImage(fromIndex, toIndex) {
+        // Preserve selection by object reference: capture selected objects before reorder
+        const before = originalImageObjects.slice();
+        const selectedObjects = Array.from(selectionSet).map(i => before[i]).filter(Boolean);
+
         const item = originalImageObjects.splice(fromIndex, 1)[0];
         originalImageObjects.splice(toIndex, 0, item);
+
+        // Rebuild selectionSet based on object references in the new array
+        selectionSet.clear();
+        selectedObjects.forEach(obj => {
+            const newIdx = originalImageObjects.indexOf(obj);
+            if (newIdx !== -1) selectionSet.add(newIdx);
+        });
+
+        // Update active/last indexes
+        lastSelectedIndex = Array.from(selectionSet)[0] || null;
+        activeImageIndex = lastSelectedIndex !== null ? lastSelectedIndex : -1;
+
+        refreshAfterImageUpdate();
+    }
+
+    // Move all currently selected images to a visual insert index (the index returned by computeInsertIndexFromY)
+    // This rebuilds the list based on DOM visual order to avoid off-by-one when visual order differs from array order (free mode).
+    function moveSelectedTo(visualInsertIndex) {
+        const before = originalImageObjects.slice();
+        const count = before.length;
+
+        // Get visual order from DOM (draggable-item elements)
+        const domEls = Array.from(document.querySelectorAll('#image-list-container .draggable-item'));
+        const domOrder = domEls.map(el => parseInt(el.dataset.index)).filter(n => Number.isFinite(n));
+
+        // Selected indices in set
+        const selectedIndices = new Set(Array.from(selectionSet).filter(i => i >= 0 && i < before.length));
+        if (selectedIndices.size === 0) return;
+
+        // Items (indices) in the order they appear visually
+        const itemsInDomOrderIndices = domOrder.filter(idx => selectedIndices.has(idx));
+
+        // new visual order after removal of selected items
+        const newDomOrder = domOrder.filter(idx => !selectedIndices.has(idx));
+
+        // Compute how many selected items appear before the visualInsertIndex in the original DOM order
+        const selectedBeforeCount = domOrder.slice(0, Math.max(0, Math.min(visualInsertIndex, domOrder.length))).filter(idx => selectedIndices.has(idx)).length;
+
+        // Convert the visual insert index (which counts all items) into an insert position in newDomOrder
+        // by subtracting the number of removed (selected) items that were before that position.
+        let insertPos = visualInsertIndex - selectedBeforeCount;
+        // Clamp into valid range for newDomOrder
+        insertPos = Math.max(0, Math.min(insertPos, newDomOrder.length));
+
+        // Insert selected visual indices at computed insertPos in the new DOM order
+        newDomOrder.splice(insertPos, 0, ...itemsInDomOrderIndices);
+
+        // Convert visual order back to array order
+        let arrayOrder;
+        if (appState.layoutMode === 'free') {
+            arrayOrder = newDomOrder.slice().reverse();
+        } else {
+            arrayOrder = newDomOrder.slice();
+        }
+
+        // Rebuild originalImageObjects according to new array order
+        originalImageObjects = arrayOrder.map(i => before[i]);
+
+        // Update selectionSet: find the new indices of the previously selected objects
+        const selectedObjects = itemsInDomOrderIndices.map(i => before[i]).filter(Boolean);
+        selectionSet.clear();
+        selectedObjects.forEach(obj => {
+            const newIdx = originalImageObjects.indexOf(obj);
+            if (newIdx !== -1) selectionSet.add(newIdx);
+        });
+
+        // Update active/last indexes
+        lastSelectedIndex = Array.from(selectionSet)[0] || null;
+        activeImageIndex = lastSelectedIndex !== null ? lastSelectedIndex : -1;
+
+        // Use the same refresh path as single-item moves so stitched background and UI update correctly
         refreshAfterImageUpdate();
     }
 
@@ -2227,6 +3080,11 @@
                 oldItem.height = img.height;
                 oldItem.thumbnail = thumb;
                 
+                // Replacing may invalidate selection indices; clear selection
+                selectionSet.clear();
+                lastSelectedIndex = null;
+                activeImageIndex = -1;
+
                 // Refresh
                 refreshAfterImageUpdate();
                 toggleLoading(false);
@@ -2243,6 +3101,8 @@
         if (appState.mode === 'self' || appState.mode === 'custom') {
             generateStitchedBase(); 
         }
+        // Note: Do NOT clear selection here unconditionally. Callers that remove/replace
+        // images should clear selection explicitly. This preserves selection across reorders.
         renderImageList();
         requestRender();
     }
@@ -2253,10 +3113,9 @@
         if (selectedImages.length === 0) return { w: 0, h: 0 };
         
         if (appState.layoutMode === 'free') {
-            // In Free Mode, canvas size is fixed reference width (e.g. 1080) * AspectRatio
-            // User Request: Increase resolution limit to match Strip Mode (which uses maxImageWidth)
-            // We'll use maxImageWidth as reference if available, otherwise fallback to 1080
-            const refWidth = maxImageWidth > 0 ? maxImageWidth : 1080;
+            // In Free Mode, canvas size is fixed reference width (FREE_MODE_REF_WIDTH) * AspectRatio
+            // Use FREE_MODE_REF_WIDTH to control Free Mode resolution
+            const refWidth = FREE_MODE_REF_WIDTH;
             return { w: refWidth, h: refWidth / appState.canvasRatio };
         } else {
             // Strip Mode
@@ -2330,7 +3189,7 @@
         if (files.length === 0) return;
 
         // Limit check
-        const MAX_IMAGES = 9;
+        const MAX_IMAGES = 20;
         if (isReplace) {
             if (files.length > MAX_IMAGES) {
                 showToast(`最多只能选择 ${MAX_IMAGES} 张图片`, true);
@@ -2436,14 +3295,9 @@
                     originalImageObjects = [...originalImageObjects, ...wrappedImages];
                 }
 
-                // Fix: Use maxImageWidth as reference for Free Mode default size
-                // If maxImageWidth is not yet calculated (first load), calculate it from current batch
-                let currentMaxW = 0;
-                if (originalImageObjects.length > 0) {
-                    currentMaxW = originalImageObjects.reduce((max, item) => Math.max(max, item.width), 0);
-                }
-                // Fallback to 1080 if something is wrong, but usually we have images
-                const refWidth = currentMaxW > 0 ? currentMaxW : 1080;
+                // Use FREE_MODE_REF_WIDTH for Free Mode to match getLogicalDimensions
+                // This ensures images are positioned within the visible canvas area
+                const refWidth = FREE_MODE_REF_WIDTH;
 
                 let startY = 20;
                 if (!isReplace && originalImageObjects.length > wrappedImages.length) {
@@ -2557,6 +3411,14 @@
 
     function generateStitchedBase() {
         if (selectedImages.length === 0) return;
+        // If we're in interactive low-res mode, debounce heavy background generation
+        if (interactiveRender) {
+            if (_genStitchedTimeout) clearTimeout(_genStitchedTimeout);
+            _genStitchedTimeout = setTimeout(() => {
+                if (!interactiveRender) generateStitchedBase();
+            }, 300);
+            return;
+        }
         
         // Generate base for Blur
         // For Strip mode: existing stack logic
@@ -2565,16 +3427,21 @@
         let canvasW, canvasH;
         if (appState.layoutMode === 'free') {
             const dim = getLogicalDimensions();
-            // Optimization: Cap background generation size
-            const MAX_BG_DIM = 1080;
-            const scale = Math.min(1.0, MAX_BG_DIM / Math.max(dim.w, dim.h));
+                // Optimization: Cap background generation size.
+                // Use a viewport-based cap when not interacting so preview fits the screen and is faster.
+                const DPR = window.devicePixelRatio || 1;
+                const viewportCap = Math.max(1024, Math.floor(window.innerWidth * DPR * 0.9));
+                const cap = interactiveRender
+                    ? Math.max(256, Math.floor(FREE_MODE_REF_WIDTH * PREVIEW_INTERACTIVE_SCALE))
+                    : Math.min(FREE_MODE_REF_WIDTH, viewportCap);
+                const scale = Math.min(1.0, cap / Math.max(dim.w, dim.h));
             
-            canvasW = dim.w * scale;
-            canvasH = dim.h * scale;
+                canvasW = Math.max(1, Math.floor(dim.w * scale));
+                canvasH = Math.max(1, Math.floor(dim.h * scale));
         } else {
             // Optimization: Downscale for background generation in Strip Mode
             // We don't need full resolution for a blurred background
-            const MAX_BG_WIDTH = 1080;
+            const MAX_BG_WIDTH = FREE_MODE_REF_WIDTH;
             const scale = Math.min(1.0, MAX_BG_WIDTH / maxImageWidth);
             
             canvasW = maxImageWidth * scale;
@@ -2672,15 +3539,26 @@
         };
 
         const onDown = (e) => {
-            if (appState.layoutMode !== 'free') return;
+            // if (appState.layoutMode !== 'free') return; // Enabled for Strip Mode click detection
             const pos = getCanvasCoords(e);
             
             // Hit Test (Reverse order for top-most first)
             let hitIndex = -1;
             let handleType = null; // 'move', 'tl', 'br'
             
-            // Check active image handles first
-            if (activeImageIndex !== -1 && activeImageIndex < selectedImages.length) {
+            if (appState.layoutMode === 'strip') {
+                let currentY = 0;
+                for (let i = 0; i < selectedImages.length; i++) {
+                    const img = selectedImages[i];
+                    if (pos.y >= currentY && pos.y < currentY + img.height) {
+                        hitIndex = i;
+                        break;
+                    }
+                    currentY += img.height;
+                }
+            }
+            // Check active image handles first (Free Mode)
+            else if (activeImageIndex !== -1 && activeImageIndex < selectedImages.length) {
                 const img = selectedImages[activeImageIndex];
                 const f = img.free;
                 const handleSize = 100; // Increased touch area for mobile
@@ -2713,8 +3591,8 @@
                 }
             }
 
-            // If no handle hit, check bodies
-            if (hitIndex === -1) {
+            // If no handle hit, check bodies (Free Mode only)
+            if (hitIndex === -1 && appState.layoutMode === 'free') {
                 for (let i = selectedImages.length - 1; i >= 0; i--) {
                     const f = selectedImages[i].free;
                     if (pos.x >= f.x && pos.x <= f.x + f.w && pos.y >= f.y && pos.y <= f.y + f.h) {
@@ -2736,8 +3614,51 @@
                     origY: f.y,
                     origW: f.w,
                     origH: f.h,
-                    aspect: f.w / f.h
+                    aspect: f.w / f.h,
+                    hitIndex: hitIndex,
+                    moved: false,
+                    didToggleOnDown: false
                 };
+
+                // Enter interactive low-res render mode for snappy feedback
+                interactiveRender = true;
+
+                // Sync selectionSet so clicking on canvas selects same item in the list
+                // Perform selection sync BEFORE building the group state so the group
+                // move decision is consistent. We record whether we toggled on down
+                // so that if the user only clicks (no drag) we can toggle on up when
+                // appropriate (allow deselect via canvas click while preserving drag).
+                let didToggle = false;
+                if (!multiSelectMode) {
+                    selectionSet.clear();
+                    selectionSet.add(hitIndex);
+                    lastSelectedIndex = hitIndex;
+                    didToggle = true;
+                } else {
+                    if (selectionSet.size > 1 && selectionSet.has(hitIndex)) {
+                        // Keep existing multi-selection when clicking a member: do NOT toggle on down.
+                        lastSelectedIndex = hitIndex;
+                        didToggle = false;
+                    } else {
+                        // Otherwise, toggle membership immediately.
+                        if (selectionSet.has(hitIndex)) selectionSet.delete(hitIndex);
+                        else selectionSet.add(hitIndex);
+                        lastSelectedIndex = hitIndex;
+                        didToggle = true;
+                    }
+                }
+                interactionState.didToggleOnDown = didToggle;
+
+                // If multiple images are selected and the hit image is among them,
+                // prepare group move state (store each member's original positions)
+                if (selectionSet.size > 0 && selectionSet.has(hitIndex) && interactionState.type === 'move') {
+                    interactionState.group = Array.from(selectionSet).map(i => {
+                        // guard index
+                        if (!selectedImages[i] || !selectedImages[i].free) return null;
+                        return { idx: i, origX: selectedImages[i].free.x, origY: selectedImages[i].free.y };
+                    }).filter(Boolean);
+                }
+
                 renderImageList(); // Update UI list highlight
                 requestRender();
             } else {
@@ -2758,10 +3679,16 @@
             const img = selectedImages[activeImageIndex];
             const dx = pos.x - interactionState.startX;
             const dy = pos.y - interactionState.startY;
+
+            // Distinguish click vs drag: mark moved if pointer moved beyond small threshold
+            if (!interactionState.moved) {
+                const movedDist = Math.hypot(dx, dy);
+                if (movedDist > 6) interactionState.moved = true;
+            }
             
             snapGuides = []; // Reset guides
 
-            if (interactionState.type === 'move') {
+                if (interactionState.type === 'move') {
                 const rawX = interactionState.origX + dx;
                 const rawY = interactionState.origY + dy;
                 let finalX = rawX;
@@ -2834,8 +3761,31 @@
                     snapGuides.push({ type: 'h', pos: snappedYVal });
                 }
 
-                img.free.x = finalX;
-                img.free.y = finalY;
+                // If moving a group, compute primary final position then apply delta to all members
+                if (interactionState.group && interactionState.group.length > 0) {
+                    // primary image index is activeImageIndex
+                    const primaryIdx = activeImageIndex;
+                    const primary = selectedImages[primaryIdx];
+                    const primaryOrig = { x: interactionState.origX, y: interactionState.origY };
+
+                    // Set primary to snapped final
+                    primary.free.x = finalX;
+                    primary.free.y = finalY;
+
+                    const deltaX = finalX - primaryOrig.x;
+                    const deltaY = finalY - primaryOrig.y;
+
+                    interactionState.group.forEach(g => {
+                        if (g.idx === primaryIdx) return; // already set
+                        const itm = selectedImages[g.idx];
+                        if (!itm || !itm.free) return;
+                        itm.free.x = g.origX + deltaX;
+                        itm.free.y = g.origY + deltaY;
+                    });
+                } else {
+                    img.free.x = finalX;
+                    img.free.y = finalY;
+                }
             }  
             else if (interactionState.type === 'br') {
                 // Resize Bottom Right - Maintain Aspect
@@ -3013,8 +3963,49 @@
             requestRender();
         };
 
-        const onUp = () => {
+        const onUp = (e) => {
             if(interactionState) {
+                // Exit interactive low-res render mode
+                interactiveRender = false;
+                // Click detection: Open editor only if drawer already open
+                if (!interactionState.moved && interactionState.hitIndex !== undefined) {
+                    const drawerOpen = inputs.drawer && inputs.drawer.classList.contains('active');
+                    if (drawerOpen) {
+                        openImageEditor(interactionState.hitIndex);
+                    } else {
+                        // Drawer closed: do not open; just sync selection/highlight
+                        // Keep activeImageIndex in sync for visual feedback
+                        activeImageIndex = interactionState.hitIndex;
+                        renderImageList();
+                        requestRender();
+                    }
+                }
+
+                // If this was a click (no meaningful move) and we didn't toggle on down,
+                // perform toggle now to allow deselect via clicking the rendered image.
+                if (!interactionState.moved && interactionState.hitIndex !== undefined && interactionState.didToggleOnDown === false) {
+                    const h = interactionState.hitIndex;
+                    if (multiSelectMode) {
+                        // toggle membership for multi-select
+                        if (selectionSet.has(h)) selectionSet.delete(h);
+                        else selectionSet.add(h);
+                        lastSelectedIndex = h;
+                        // Keep active index in sync
+                        activeImageIndex = selectionSet.has(h) ? h : -1;
+                        renderImageList();
+                        requestRender();
+                    } else {
+                        // single-select: clicking again should deselect
+                        if (selectionSet.has(h)) {
+                            selectionSet.delete(h);
+                            lastSelectedIndex = null;
+                            activeImageIndex = -1;
+                            renderImageList();
+                            requestRender();
+                        }
+                    }
+                }
+
                 // Update blur base on drop if using self blur
                 if((appState.mode === 'self' || appState.mode === 'custom') && appState.layoutMode === 'free') {
                     generateStitchedBase();
@@ -3046,7 +4037,14 @@
         const borderWidth = maxImageWidth * (appState.borderWidthRatio / 100);
 
         let renderScale = 1.0;
-        
+
+        // Determine preview cap width depending on interactive state and viewport
+        const DPR = window.devicePixelRatio || 1;
+        const viewportCap = Math.max(1024, Math.floor(window.innerWidth * DPR * 0.9));
+        const maxPreviewCap = (isExport)
+            ? FREE_MODE_REF_WIDTH
+            : (interactiveRender ? Math.max(256, Math.floor(FREE_MODE_REF_WIDTH * PREVIEW_INTERACTIVE_SCALE)) : Math.min(FREE_MODE_REF_WIDTH, viewportCap));
+
         if (isExport) {
             renderScale = appState.exportScale / 100;
             // Limit max dimension to 20000px to prevent canvas errors
@@ -3055,7 +4053,7 @@
                 renderScale = 20000 / maxSide;
             }
         } else {
-            const MAX_PREVIEW_WIDTH = 1080;
+            const MAX_PREVIEW_WIDTH = maxPreviewCap;
             if (finalWidth > MAX_PREVIEW_WIDTH) {
                 renderScale = MAX_PREVIEW_WIDTH / finalWidth;
             }
@@ -3105,8 +4103,8 @@
                 // Even if blur is 0, we keep a base blur for the ambient layer
                 // Fix: Scale blur by renderScale to prevent huge performance cost and visual mismatch
                 const baseBlur = 20 * (finalWidth/1080) * renderScale;
-                // Fix: Use 1000 divisor for Free Mode too (User Request)
-                const variableBlur = appState.blur * (finalWidth/1000) * renderScale;
+                // Fix: Use 500 divisor for Free Mode blur scaling
+                const variableBlur = appState.blur * (finalWidth/500) * renderScale;
                 const ambientBlur = baseBlur + variableBlur;
                 
                 offCtx.filter = `blur(${ambientBlur}px) saturate(${item.edit.sat}%) brightness(${100 + item.edit.bri}%) contrast(${item.edit.con}%)`;
@@ -3142,7 +4140,7 @@
                 let filterEffects = [];
                 if (appState.blur > 0) {
                     // Fix: Scale blur by renderScale
-                    const blurRadius = appState.blur * (finalWidth/1000) * renderScale; 
+                    const blurRadius = appState.blur * (finalWidth/500) * renderScale; 
                     filterEffects.push(`blur(${blurRadius}px)`);
                 }
                 if (appState.saturation !== 100) filterEffects.push(`saturate(${appState.saturation}%)`);
@@ -3218,7 +4216,7 @@
                     let bottomFilter = [];
                     // Base blur for bottom layer is higher
                     // Fix: Scale blur by renderScale
-                    const bottomBlurRadius = ((appState.blur * 2.5) * (finalWidth/1000) * renderScale); 
+                    const bottomBlurRadius = ((appState.blur * 2.5) * (finalWidth/500) * renderScale); 
                     if (bottomBlurRadius > 0) bottomFilter.push(`blur(${bottomBlurRadius}px)`);
                     if (appState.saturation !== 100) bottomFilter.push(`saturate(${appState.saturation}%)`);
                     
@@ -3232,10 +4230,10 @@
                 let filterEffects = [];
                 if (appState.blur > 0) {
                     // Fix: Unified blur multiplier for both modes (User request)
-                    // Previous: Strip mode used 200/50, now back to 1000 (same as Free mode)
-                    // New Request: Both modes use 1000
+                    // Previous: Strip mode used 200/50, adjusted to use unified divisor
+                    // New Request: Use divisor = 500 for blur scaling
                     // Fix: Scale blur by renderScale
-                    const divisor = 1000;
+                    const divisor = 500;
                     const blurRadius = (appState.blur * (finalWidth/divisor) * renderScale); 
                     filterEffects.push(`blur(${blurRadius}px)`);
                 }
@@ -3313,8 +4311,8 @@
                 ctx.filter = 'none';
                 ctx.restore();
 
-                // Selection Overlay (Only if not exporting)
-                if (!isExport && idx === activeImageIndex) {
+                // Selection Overlay (Only if not exporting) - only show overlays in Free mode
+                if (!isExport && appState.layoutMode === 'free' && (idx === activeImageIndex || selectionSet.has(idx))) {
                     ctx.save();
                     ctx.strokeStyle = '#29499d';
                     ctx.lineWidth = 2 / renderScale; 
