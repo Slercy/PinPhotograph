@@ -1,4 +1,4 @@
-# PinPhotograph 图片拼接编辑器
+<img width="1467" height="1085" alt="PixPin_2026-01-02_23-26-20" src="https://github.com/user-attachments/assets/0727d857-ec49-4f76-a0a0-f673c1109498" /># PinPhotograph 图片拼接编辑器
 
 ## 概述
 PinPhotograph 是一款功能强大的图片拼接编辑网页应用，支持两种独特的编辑模式：条形拼接和自由位置布局。应用提供丰富的边框自定义选项，最独特的功能是高斯模糊背景和高级图层混合效果。
@@ -10,15 +10,17 @@ https://slercy.github.io/PinPhotograph/
   
 
 ### 效果示意
-
+## 条形拼接模式
 <div align="center">
+	<img src="https://github.com/user-attachments/assets/f1408f92-ebfb-4ffa-bd1c-b0e9b0e465ad" width="20%">
+	<img src="https://github.com/user-attachments/assets/9896e5da-413b-4205-9ff7-f5cd74446c45" width="20%">
+	<img src="https://github.com/user-attachments/assets/c5e5d9be-0672-4abd-b990-28eee0ddf7bd" width="20%">
+</div>
 
-    <img src="https://github.com/user-attachments/assets/f1408f92-ebfb-4ffa-bd1c-b0e9b0e465ad" width="20%">
-
-    <img src="https://github.com/user-attachments/assets/9896e5da-413b-4205-9ff7-f5cd74446c45" width="20%">
-
-    <img src="https://github.com/user-attachments/assets/c5e5d9be-0672-4abd-b990-28eee0ddf7bd" width="20%">
-
+## 自由位置模式
+<div align="center">
+	![PinPhotograph-20260103_1626](https://github.com/user-attachments/assets/277fa118-a355-4728-b33f-b6dd0c4f8ae0)
+	![PinPhotograph-20260103_1628](https://github.com/user-attachments/assets/ecff4b27-390f-441c-88d1-8ba91a0cc4dd)
 </div>
 
   
@@ -73,6 +75,9 @@ https://slercy.github.io/PinPhotograph/
 	- **顶层**：原始清晰图片，应用饱和度/亮度/对比度调整
 	- **中层**：可调节模糊度的模糊层，支持多种混合模式（叠加、滤色等）
 	- **底层**：2倍放大的环境模糊层，用于防止“自由位置”模式下画布的底色露出，默认带有基础模糊效果
+ 	- <img width="1467" height="1085" alt="PixPin_2026-01-02_23-26-20" src="https://github.com/user-attachments/assets/2a28847a-6677-469f-88fa-5ace9017587c" />
+
+ 
 
 ---
 
