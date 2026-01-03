@@ -428,6 +428,10 @@
                                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"></rect><rect x="14" y="3" width="7" height="7" rx="1"></rect><rect x="3" y="14" width="7" height="7" rx="1"></rect></svg>
                                 <span>多选</span>
                             </button>
+                            <button id="btn-delete-selected" class="btn-ripple bg-[#b33] hover:bg-[#c55] text-white px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center space-x-1 shadow-sm" title="删除选中">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path></svg>
+                                <span>删除</span>
+                            </button>
                              <button id="btn-add-images" class="btn-ripple bg-[#29499d] hover:bg-[#345ac5] text-white px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center space-x-1 shadow-sm">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
                                 <span>添加</span>
@@ -1001,6 +1005,7 @@ let _genStitchedTimeout = null;
         
         btnCustomBg: document.getElementById('custom-img-btn-container'),
         btnMultiSelect: document.getElementById('btn-multiselect'),
+        btnDeleteSelected: document.getElementById('btn-delete-selected'),
         btnAddImages: document.getElementById('btn-add-images'),
         btnSave: document.getElementById('btn-save'),
         btnHome: document.getElementById('btn-back-home'),
@@ -1417,9 +1422,10 @@ let _genStitchedTimeout = null;
     });
 
     function initializeFreePositionsIfNeeded() {
-        // Simple vertical layout for init, fitting in FREE_MODE_REF_WIDTH
-        const refWidth = FREE_MODE_REF_WIDTH;
-        let currentY = 50;
+        // Simple vertical layout for init, fitting within logical canvas height
+        const dims = getLogicalDimensions();
+        const refHeight = dims.h;
+        let currentY = 0;
         
         // Check if we need to init (e.g. if x,y are all 0)
         // Or just re-layout if user asks? For now, automatic only if missing data.
@@ -1430,15 +1436,16 @@ let _genStitchedTimeout = null;
         if (allZero) {
             originalImageObjects.forEach(item => {
                 if (!item.free) item.free = {};
-                // Default scale to fit width with some padding
-                const desiredW = refWidth * 0.6; // 60% width
-                const scale = desiredW / item.width;
-                
-                item.free.w = item.width * scale;
-                item.free.h = item.height * scale;
-                item.free.x = (refWidth - item.free.w) / 2;
+                // Default scale so image height matches canvas logical height
+                const desiredH = refHeight; // fill canvas height
+                const scale = desiredH / item.height;
+
+                item.free.h = Math.max(1, item.height * scale);
+                item.free.w = Math.max(1, item.width * scale);
+                // center horizontally within logical width
+                item.free.x = Math.max(0, Math.round((dims.w - item.free.w) / 2));
                 item.free.y = currentY;
-                
+
                 currentY += item.free.h + 20;
             });
         }
@@ -1492,7 +1499,7 @@ let _genStitchedTimeout = null;
         if (inputs.btnMultiSelect) {
             inputs.btnMultiSelect.addEventListener('click', (e) => {
                 multiSelectMode = !multiSelectMode;
-                if (multiSelectMode) {
+                    if (multiSelectMode) {
                     inputs.btnMultiSelect.classList.remove('bg-[#444]');
                     inputs.btnMultiSelect.classList.add('bg-[#29499d]');
                 } else {
@@ -1520,6 +1527,40 @@ let _genStitchedTimeout = null;
             inputs.customBgFile.click();
         });
         inputs.customBgFile.addEventListener('change', handleCustomBgSelection);
+
+        // Delete selected / active image (button 常驻)
+        if (inputs.btnDeleteSelected) {
+            inputs.btnDeleteSelected.addEventListener('click', (e) => {
+                // If multi-select mode: delete all in selectionSet
+                if (multiSelectMode) {
+                    if (selectionSet.size === 0) return;
+                    const indices = Array.from(selectionSet).filter(i=>typeof i === 'number').sort((a,b)=>b-a);
+                    for (const idx of indices) {
+                        if (idx >= 0 && idx < originalImageObjects.length) {
+                            originalImageObjects.splice(idx, 1);
+                        }
+                    }
+                } else {
+                    // Single-select: prefer activeImageIndex, fallback to first in selectionSet
+                    let idx = (typeof activeImageIndex === 'number' && activeImageIndex >= 0) ? activeImageIndex : -1;
+                    if (idx === -1 && selectionSet.size > 0) {
+                        const first = Array.from(selectionSet)[0];
+                        if (typeof first === 'number') idx = first;
+                    }
+                    if (idx === -1) return;
+                    if (idx >= 0 && idx < originalImageObjects.length) {
+                        originalImageObjects.splice(idx, 1);
+                    }
+                }
+                selectionSet.clear();
+                activeImageIndex = -1;
+                recalculateDimensions();
+                renderImageList();
+                generateStitchedBase();
+                requestRender();
+                saveSettings();
+            });
+        }
 
         inputs.toggleOuterBorder.addEventListener('change', (e) => {
             appState.outerBorder = e.target.checked;
@@ -2510,6 +2551,7 @@ let _genStitchedTimeout = null;
 
     function renderImageList() {
         const container = inputs.imageListContainer;
+        if (inputs && inputs.imgCount) inputs.imgCount.innerText = originalImageObjects.length;
         container.innerHTML = '';
         cleanupPlaceholders();
 
@@ -3113,10 +3155,21 @@ let _genStitchedTimeout = null;
         if (selectedImages.length === 0) return { w: 0, h: 0 };
         
         if (appState.layoutMode === 'free') {
-            // In Free Mode, canvas size is fixed reference width (FREE_MODE_REF_WIDTH) * AspectRatio
-            // Use FREE_MODE_REF_WIDTH to control Free Mode resolution
-            const refWidth = FREE_MODE_REF_WIDTH;
-            return { w: refWidth, h: refWidth / appState.canvasRatio };
+            // In Free Mode, treat FREE_MODE_REF_WIDTH as the short edge (短边)
+            // This produces the larger/resolution-preferred behavior for portrait-oriented targets
+            const shortEdge = FREE_MODE_REF_WIDTH;
+            const ratio = appState.canvasRatio || (9/16);
+            if (ratio >= 1) {
+                // landscape: height is the short edge
+                const h = shortEdge;
+                const w = Math.max(1, Math.round(h * ratio));
+                return { w, h };
+            } else {
+                // portrait: width is the short edge
+                const w = shortEdge;
+                const h = Math.max(1, Math.round(w / ratio));
+                return { w, h };
+            }
         } else {
             // Strip Mode
             const borderWidth = maxImageWidth * (appState.borderWidthRatio / 100);
@@ -3372,12 +3425,24 @@ let _genStitchedTimeout = null;
     }
 
     function recalculateDimensions() {
-        if (originalImageObjects.length === 0) return;
+        if (originalImageObjects.length === 0) {
+            maxImageWidth = 0;
+            selectedImages = [];
+            // Clear preview/stitched base when no images remain
+            stitchedImage = null;
+            // Update UI counters
+            if (inputs && inputs.imgCount) inputs.imgCount.innerText = '0';
+            updateResolutionDisplay();
+            // Also clear visible preview canvas to avoid stale image
+            clearPreviewCanvas();
+            return;
+        }
+
         maxImageWidth = 0;
         originalImageObjects.forEach(item => {
             if (item.width > maxImageWidth) maxImageWidth = item.width;
         });
-        
+
         selectedImages = originalImageObjects.map(item => {
             const ratio = item.height / item.width;
             const newHeight = maxImageWidth * ratio;
@@ -3390,6 +3455,19 @@ let _genStitchedTimeout = null;
             };
         });
         updateResolutionDisplay();
+    }
+
+    function clearPreviewCanvas() {
+        try {
+            const c = inputs && inputs.previewCanvas;
+            if (c && c.getContext) {
+                const ctx = c.getContext('2d');
+                ctx.save();
+                ctx.setTransform(1,0,0,1,0,0);
+                ctx.clearRect(0,0,c.width || c.clientWidth || 1, c.height || c.clientHeight || 1);
+                ctx.restore();
+            }
+        } catch (err) { /* ignore */ }
     }
 
     function handleCustomBgSelection(e) {
@@ -3791,36 +3869,54 @@ let _genStitchedTimeout = null;
                 // Resize Bottom Right - Maintain Aspect
                 let newW = interactionState.origW + dx;
                 if (newW < 50) newW = 50;
-                
-                // Snap Width to other images/canvas edges
+
                 const dim = getLogicalDimensions();
                 const snapThreshold = Math.max(10, Math.min(50, dim.w * 0.015));
+
+                // X snapping (right edge)
                 const currentRight = interactionState.origX + newW;
-                
-                // Collect X targets
                 const targetsX = [0, dim.w/2, dim.w];
                 selectedImages.forEach((item, idx) => {
-                    if(idx === activeImageIndex) return;
+                    if (idx === activeImageIndex) return;
                     targetsX.push(item.free.x, item.free.x + item.free.w/2, item.free.x + item.free.w);
                 });
-                
                 let snappedXVal = null;
-                let minDelta = snapThreshold;
-                
+                let minDeltaX = snapThreshold;
                 targetsX.forEach(t => {
-                    if (Math.abs(t - currentRight) < minDelta) {
-                        minDelta = Math.abs(t - currentRight);
-                        snappedXVal = t;
-                    }
+                    const d = Math.abs(t - currentRight);
+                    if (d < minDeltaX) { minDeltaX = d; snappedXVal = t; }
                 });
-                
-                if (snappedXVal !== null) {
+
+                // Compute provisional height from width
+                let newH = newW / interactionState.aspect;
+                // Y snapping (bottom edge)
+                const currentBottom = interactionState.origY + newH;
+                const targetsY = [0, dim.h/2, dim.h];
+                selectedImages.forEach((item, idx) => {
+                    if (idx === activeImageIndex) return;
+                    targetsY.push(item.free.y, item.free.y + item.free.h/2, item.free.y + item.free.h);
+                });
+                let snappedYVal = null;
+                let minDeltaY = snapThreshold;
+                targetsY.forEach(t => {
+                    const d = Math.abs(t - currentBottom);
+                    if (d < minDeltaY) { minDeltaY = d; snappedYVal = t; }
+                });
+
+                // Prefer the closer axis snap
+                if (snappedYVal !== null && minDeltaY < minDeltaX) {
+                    // Snap bottom edge to snappedYVal
+                    newH = snappedYVal - interactionState.origY;
+                    if (newH < 50) newH = 50;
+                    newW = newH * interactionState.aspect;
+                    snapGuides.push({ type: 'h', pos: snappedYVal });
+                } else if (snappedXVal !== null) {
                     newW = snappedXVal - interactionState.origX;
-                    if (newW < 50) newW = 50; // Re-clamp
+                    if (newW < 50) newW = 50;
+                    newH = newW / interactionState.aspect;
                     snapGuides.push({ type: 'v', pos: snappedXVal });
                 }
 
-                let newH = newW / interactionState.aspect;
                 img.free.w = newW;
                 img.free.h = newH;
             }
@@ -3837,36 +3933,51 @@ let _genStitchedTimeout = null;
                 // Snap Width (Right Edge)
                 const dim = getLogicalDimensions();
                 const snapThreshold = Math.max(10, Math.min(50, dim.w * 0.015));
+
+                // X snapping
                 const currentRight = interactionState.origX + newW;
-                
                 const targetsX = [0, dim.w/2, dim.w];
                 selectedImages.forEach((item, idx) => {
-                    if(idx === activeImageIndex) return;
+                    if (idx === activeImageIndex) return;
                     targetsX.push(item.free.x, item.free.x + item.free.w/2, item.free.x + item.free.w);
                 });
-                
                 let snappedXVal = null;
-                let minDelta = snapThreshold;
-                
+                let minDeltaX = snapThreshold;
                 targetsX.forEach(t => {
-                    if (Math.abs(t - currentRight) < minDelta) {
-                        minDelta = Math.abs(t - currentRight);
-                        snappedXVal = t;
-                    }
+                    const d = Math.abs(t - currentRight);
+                    if (d < minDeltaX) { minDeltaX = d; snappedXVal = t; }
                 });
-                
-                if (snappedXVal !== null) {
+
+                // provisional height
+                let newH = newW / interactionState.aspect;
+                // Y snapping (top edge). Anchor bottom (blY) fixed
+                const blY = interactionState.origY + interactionState.origH;
+                const currentTop = blY - newH;
+                const targetsY = [0, dim.h/2, dim.h];
+                selectedImages.forEach((item, idx) => {
+                    if (idx === activeImageIndex) return;
+                    targetsY.push(item.free.y, item.free.y + item.free.h/2, item.free.y + item.free.h);
+                });
+                let snappedYVal = null;
+                let minDeltaY = snapThreshold;
+                targetsY.forEach(t => {
+                    const d = Math.abs(t - currentTop);
+                    if (d < minDeltaY) { minDeltaY = d; snappedYVal = t; }
+                });
+
+                if (snappedYVal !== null && minDeltaY < minDeltaX) {
+                    // Snap top to snappedYVal
+                    newH = blY - snappedYVal;
+                    if (newH < 50) newH = 50;
+                    newW = newH * interactionState.aspect;
+                    snapGuides.push({ type: 'h', pos: snappedYVal });
+                } else if (snappedXVal !== null) {
                     newW = snappedXVal - interactionState.origX;
                     if (newW < 50) newW = 50;
+                    newH = newW / interactionState.aspect;
                     snapGuides.push({ type: 'v', pos: snappedXVal });
                 }
 
-                let newH = newW / interactionState.aspect;
-                
-                // Anchor is Bottom-Left (x, y+h)
-                // New Y = (Old Y + Old H) - New H
-                const blY = interactionState.origY + interactionState.origH;
-                
                 img.free.y = blY - newH;
                 img.free.w = newW;
                 img.free.h = newH;
@@ -3879,40 +3990,53 @@ let _genStitchedTimeout = null;
                 
                 let newW = (trX - pos.x);
                 if (newW < 50) newW = 50;
-                
-                // Snap Width (Left Edge)
-                // Left Edge = trX - newW
-                // We want Left Edge to match target
+
                 const dim = getLogicalDimensions();
                 const snapThreshold = Math.max(10, Math.min(50, dim.w * 0.015));
+
+                // X snapping (left edge = trX - newW)
                 const currentLeft = trX - newW;
-                
                 const targetsX = [0, dim.w/2, dim.w];
                 selectedImages.forEach((item, idx) => {
-                    if(idx === activeImageIndex) return;
+                    if (idx === activeImageIndex) return;
                     targetsX.push(item.free.x, item.free.x + item.free.w/2, item.free.x + item.free.w);
                 });
-                
                 let snappedXVal = null;
-                let minDelta = snapThreshold;
-                
+                let minDeltaX = snapThreshold;
                 targetsX.forEach(t => {
-                    if (Math.abs(t - currentLeft) < minDelta) {
-                        minDelta = Math.abs(t - currentLeft);
-                        snappedXVal = t;
-                    }
+                    const d = Math.abs(t - currentLeft);
+                    if (d < minDeltaX) { minDeltaX = d; snappedXVal = t; }
                 });
-                
-                if (snappedXVal !== null) {
-                    // currentLeft should be snappedXVal
-                    // trX - newW = snappedXVal => newW = trX - snappedXVal
+
+                // provisional height
+                let newH = newW / interactionState.aspect;
+                // Y snapping (bottom edge)
+                const currentBottom = interactionState.origY + newH;
+                const targetsY = [0, dim.h/2, dim.h];
+                selectedImages.forEach((item, idx) => {
+                    if (idx === activeImageIndex) return;
+                    targetsY.push(item.free.y, item.free.y + item.free.h/2, item.free.y + item.free.h);
+                });
+                let snappedYVal = null;
+                let minDeltaY = snapThreshold;
+                targetsY.forEach(t => {
+                    const d = Math.abs(t - currentBottom);
+                    if (d < minDeltaY) { minDeltaY = d; snappedYVal = t; }
+                });
+
+                if (snappedYVal !== null && minDeltaY < minDeltaX) {
+                    // snap bottom
+                    newH = snappedYVal - interactionState.origY;
+                    if (newH < 50) newH = 50;
+                    newW = newH * interactionState.aspect;
+                    snapGuides.push({ type: 'h', pos: snappedYVal });
+                } else if (snappedXVal !== null) {
                     newW = trX - snappedXVal;
                     if (newW < 50) newW = 50;
                     snapGuides.push({ type: 'v', pos: snappedXVal });
+                    newH = newW / interactionState.aspect;
                 }
 
-                let newH = newW / interactionState.aspect;
-                
                 img.free.x = trX - newW;
                 img.free.w = newW;
                 img.free.h = newH;
@@ -3945,15 +4069,35 @@ let _genStitchedTimeout = null;
                         snappedXVal = t;
                     }
                 });
-                
-                if (snappedXVal !== null) {
+
+                // Y snapping for top-left (top edge = brY - newH)
+                let newH = newW / interactionState.aspect;
+                const currentTop = brY - newH;
+                const targetsY = [0, dim.h/2, dim.h];
+                selectedImages.forEach((item, idx) => {
+                    if (idx === activeImageIndex) return;
+                    targetsY.push(item.free.y, item.free.y + item.free.h/2, item.free.y + item.free.h);
+                });
+                let snappedYVal = null;
+                let minDeltaY = snapThreshold;
+                targetsY.forEach(t => {
+                    const d = Math.abs(t - currentTop);
+                    if (d < minDeltaY) { minDeltaY = d; snappedYVal = t; }
+                });
+
+                if (snappedYVal !== null && minDeltaY < minDelta) {
+                    // Snap top to snappedYVal
+                    newH = brY - snappedYVal;
+                    if (newH < 50) newH = 50;
+                    newW = newH * interactionState.aspect;
+                    snapGuides.push({ type: 'h', pos: snappedYVal });
+                } else if (snappedXVal !== null) {
                     newW = brX - snappedXVal;
                     if (newW < 50) newW = 50;
                     snapGuides.push({ type: 'v', pos: snappedXVal });
+                    newH = newW / interactionState.aspect;
                 }
 
-                let newH = newW / interactionState.aspect;
-                
                 img.free.x = brX - newW;
                 img.free.y = brY - newH;
                 img.free.w = newW;
@@ -4059,8 +4203,15 @@ let _genStitchedTimeout = null;
             }
         }
 
-        canvas.width = finalWidth * renderScale;
-        canvas.height = finalHeight * renderScale;
+        // Keep canvas CSS display size stable to avoid visual jumps when backing store changes
+        const previewContainer = document.getElementById('preview-container');
+        const dispW = previewContainer ? previewContainer.clientWidth : (finalWidth * Math.min(1, renderScale));
+        const dispH = previewContainer ? previewContainer.clientHeight : (finalHeight * Math.min(1, renderScale));
+        canvas.style.width = dispW + 'px';
+        canvas.style.height = dispH + 'px';
+
+        canvas.width = Math.max(1, Math.round(finalWidth * renderScale));
+        canvas.height = Math.max(1, Math.round(finalHeight * renderScale));
 
         ctx.save();
         ctx.scale(renderScale, renderScale);
