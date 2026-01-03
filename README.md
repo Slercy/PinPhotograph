@@ -1,4 +1,4 @@
-<img width="1467" height="1085" alt="PixPin_2026-01-02_23-26-20" src="https://github.com/user-attachments/assets/0727d857-ec49-4f76-a0a0-f673c1109498" /># PinPhotograph 图片拼接编辑器
+# PinPhotograph 图片拼接编辑器
 
 ## 概述
 PinPhotograph 是一款功能强大的图片拼接编辑网页应用，支持两种独特的编辑模式：条形拼接和自由位置布局。应用提供丰富的边框自定义选项，最独特的功能是高斯模糊背景和高级图层混合效果。
