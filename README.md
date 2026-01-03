@@ -19,11 +19,10 @@ https://slercy.github.io/PinPhotograph/
 
 ## 自由位置模式
 <div align="center">
-	![PinPhotograph-20260103_1626](https://github.com/user-attachments/assets/277fa118-a355-4728-b33f-b6dd0c4f8ae0)
-	![PinPhotograph-20260103_1628](https://github.com/user-attachments/assets/ecff4b27-390f-441c-88d1-8ba91a0cc4dd)
+	<img src="https://github.com/user-attachments/assets/603895dc-cdfe-4162-a1f3-a56a4f10d402" width="50%">
+	<img src="https://github.com/user-attachments/assets/ebeadfd8-1f41-43ab-8865-c787ab4fdc08" width="50%">
 </div>
 
-  
 
 ## 功能特性
 
@@ -74,11 +73,10 @@ https://slercy.github.io/PinPhotograph/
 - 注：推荐拉高“缩放背景”以获得更自然的效果
 	- **顶层**：原始清晰图片，应用饱和度/亮度/对比度调整
 	- **中层**：可调节模糊度的模糊层，支持多种混合模式（叠加、滤色等）
-	- **底层**：2倍放大的环境模糊层，用于防止“自由位置”模式下画布的底色露出，默认带有基础模糊效果
- 	- <img width="1467" height="1085" alt="PixPin_2026-01-02_23-26-20" src="https://github.com/user-attachments/assets/2a28847a-6677-469f-88fa-5ace9017587c" />
-
- 
-
+	- **底层**：2倍放大的环境模糊层，用于防止“自由位置”模式下画布的底色露出，默认带有基础模糊效果	 
+<div align="center">
+	<img src="https://github.com/user-attachments/assets/9b7b45c0-347e-42e6-a424-d6e5e7b0401c" width="50%">
+</div>
 ---
 
 _PinPhotograph 持续更新中，欢迎反馈使用体验和建议！_
